@@ -166,6 +166,29 @@ namespace
         return true;
     }
 
+    bool IsSafeTargetPickerFileName(const std::wstring& fileName)
+    {
+        const std::wstring prefix = L"target-picker-";
+        const std::wstring suffix = L".txt";
+        if (fileName.size() <= prefix.size() + suffix.size() ||
+            fileName.compare(0, prefix.size(), prefix) != 0 ||
+            fileName.compare(fileName.size() - suffix.size(), suffix.size(), suffix) != 0)
+        {
+            return false;
+        }
+        for (wchar_t character : fileName)
+        {
+            if (!(character >= L'a' && character <= L'z') &&
+                !(character >= L'A' && character <= L'Z') &&
+                !(character >= L'0' && character <= L'9') &&
+                character != L'-' && character != L'.')
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     std::wstring CreateIconFileName(const std::wstring& name, const std::wstring& target)
     {
         uint64_t hash = 1469598103934665603ULL;
@@ -358,6 +381,122 @@ namespace
         return true;
     }
 
+    bool WriteTargetPickerResult(
+        const std::wstring& outputPath,
+        const std::wstring& selectedPath,
+        const std::wstring& iconFileName)
+    {
+        std::wstring temporaryOutputPath = outputPath + L".tmp";
+        std::ofstream output(temporaryOutputPath, std::ios::binary | std::ios::trunc);
+        if (!output)
+        {
+            return false;
+        }
+        output << EncodeBase64(selectedPath) << '\t'
+            << WideToUtf8(iconFileName) << '\n';
+        output.flush();
+        bool writeSucceeded = output.good();
+        output.close();
+        if (!writeSucceeded || !MoveFileExW(
+            temporaryOutputPath.c_str(),
+            outputPath.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            DeleteFileW(temporaryOutputPath.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    bool PickTargetFile(const std::wstring& localStateDirectory, const std::wstring& outputName)
+    {
+        IFileOpenDialog* dialog = nullptr;
+        HRESULT result = CoCreateInstance(
+            CLSID_FileOpenDialog,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&dialog));
+        if (FAILED(result))
+        {
+            return false;
+        }
+
+        FILEOPENDIALOGOPTIONS options = {};
+        result = dialog->GetOptions(&options);
+        if (SUCCEEDED(result))
+        {
+            result = dialog->SetOptions(options |
+                FOS_FORCEFILESYSTEM |
+                FOS_FILEMUSTEXIST |
+                FOS_PATHMUSTEXIST |
+                FOS_NODEREFERENCELINKS);
+        }
+        COMDLG_FILTERSPEC filters[] =
+        {
+            { L"\u6240\u6709\u53ef\u542f\u52a8\u6587\u4ef6", L"*.exe;*.com;*.bat;*.cmd;*.lnk;*.msc;*.ps1;*.url" },
+            { L"\u6240\u6709\u6587\u4ef6", L"*.*" }
+        };
+        if (SUCCEEDED(result))
+        {
+            result = dialog->SetFileTypes(ARRAYSIZE(filters), filters);
+        }
+        if (SUCCEEDED(result))
+        {
+            dialog->SetTitle(L"\u9009\u62e9\u8981\u6253\u5f00\u7684\u7a0b\u5e8f\u3001\u6587\u4ef6\u6216\u5feb\u6377\u65b9\u5f0f");
+            result = dialog->Show(nullptr);
+        }
+
+        const std::wstring outputPath = localStateDirectory + L"\\" + outputName;
+        if (result == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+        {
+            dialog->Release();
+            return WriteTargetPickerResult(outputPath, std::wstring(), std::wstring());
+        }
+        if (FAILED(result))
+        {
+            dialog->Release();
+            return false;
+        }
+
+        IShellItem* item = nullptr;
+        result = dialog->GetResult(&item);
+        dialog->Release();
+        if (FAILED(result) || item == nullptr)
+        {
+            return false;
+        }
+
+        PWSTR selectedPathValue = nullptr;
+        result = item->GetDisplayName(SIGDN_FILESYSPATH, &selectedPathValue);
+        if (FAILED(result) || selectedPathValue == nullptr || selectedPathValue[0] == L'\0')
+        {
+            if (selectedPathValue != nullptr) CoTaskMemFree(selectedPathValue);
+            item->Release();
+            return false;
+        }
+        std::wstring selectedPath(selectedPathValue);
+        CoTaskMemFree(selectedPathValue);
+
+        std::wstring iconFileName = outputName.substr(0, outputName.size() - 4) + L".png";
+        std::wstring iconPath = localStateDirectory + L"\\" + iconFileName;
+        IWICImagingFactory* imagingFactory = nullptr;
+        CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&imagingFactory));
+        if (imagingFactory == nullptr || !SaveShellItemIcon(item, imagingFactory, iconPath))
+        {
+            iconFileName.clear();
+        }
+        if (imagingFactory != nullptr) imagingFactory->Release();
+        item->Release();
+
+        if (!WriteTargetPickerResult(outputPath, selectedPath, iconFileName))
+        {
+            if (!iconFileName.empty()) DeleteFileW(iconPath.c_str());
+            return false;
+        }
+        return true;
+    }
+
     HRESULT ActivateApplication(const std::wstring& target, const std::wstring& arguments)
     {
         IApplicationActivationManager* activationManager = nullptr;
@@ -519,6 +658,7 @@ namespace
 
 int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
 {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     std::wstring requestPath = GetRequestPath();
     if (requestPath.empty())
@@ -568,6 +708,19 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
         std::wstring iconDirectory = localStateDirectory + L"\\AppCatalog";
         bool success = WriteInstalledAppCatalog(
             localStateDirectory + L"\\" + target, iconDirectory);
+        CoUninitialize();
+        return success ? 0 : 4;
+    }
+
+    if (kind == L"PickFile")
+    {
+        std::wstring localStateDirectory = GetParentDirectory(requestPath);
+        if (localStateDirectory.empty() || !IsSafeTargetPickerFileName(target))
+        {
+            CoUninitialize();
+            return 3;
+        }
+        bool success = PickTargetFile(localStateDirectory, target);
         CoUninitialize();
         return success ? 0 : 4;
     }

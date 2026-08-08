@@ -96,24 +96,49 @@ namespace CreateYourTile.Uwp
                 return;
             }
 
-            FileOpenPicker picker = new FileOpenPicker
+            try
             {
-                SuggestedStartLocation = PickerLocationId.ComputerFolder,
-                ViewMode = PickerViewMode.List
-            };
-            picker.FileTypeFilter.Add("*");
-            StorageFile file = await picker.PickSingleFileAsync();
-            if (file == null)
-            {
-                return;
-            }
+                TargetFilePickerResult selected = await TargetFilePicker.PickAsync();
+                if (selected == null)
+                {
+                    SetStatus("未选择文件。", false);
+                    return;
+                }
 
-            TargetTextBox.Text = file.Path;
-            if (string.IsNullOrWhiteSpace(NameTextBox.Text))
-            {
-                NameTextBox.Text = file.DisplayName;
+                TargetTextBox.Text = selected.Path;
+                string displayName = System.IO.Path.GetFileNameWithoutExtension(selected.Path);
+                if (string.IsNullOrWhiteSpace(displayName))
+                {
+                    displayName = selected.Path;
+                }
+                if (string.IsNullOrWhiteSpace(NameTextBox.Text))
+                {
+                    NameTextBox.Text = displayName;
+                }
+
+                if (selected.IconFile != null)
+                {
+                    try
+                    {
+                        using (IRandomAccessStreamWithContentType stream = await selected.IconFile.OpenReadAsync())
+                        {
+                            StorageFile iconFile = await TileImageService.CopyStreamToTemporaryFileAsync(
+                                stream,
+                                "selected-target-thumbnail.img");
+                            await ApplySourceImageAsync(iconFile, displayName + " 的图标");
+                        }
+                    }
+                    finally
+                    {
+                        await selected.IconFile.DeleteAsync(StorageDeleteOption.PermanentDelete);
+                    }
+                }
+                SetStatus("已选择目标：" + selected.Path, false);
             }
-            await TryUseStorageItemThumbnailAsync(file, file.DisplayName + " 的图标");
+            catch (Exception exception)
+            {
+                SetStatus("无法选择目标：" + exception.Message, true);
+            }
         }
 
         private async void BrowseFolderButton_Click(object sender, RoutedEventArgs e)
@@ -650,6 +675,12 @@ namespace CreateYourTile.Uwp
 
         private static string NormalizeTarget(string target, string targetKind)
         {
+            target = target.Trim();
+            if (targetKind == "File" && target.Length >= 2 &&
+                target[0] == '"' && target[target.Length - 1] == '"')
+            {
+                target = target.Substring(1, target.Length - 2).Trim();
+            }
             if (targetKind == "File" && target.Length == 2 && char.IsLetter(target[0]) && target[1] == ':')
             {
                 return target + "\\";
