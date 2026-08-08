@@ -1,6 +1,10 @@
 [CmdletBinding()]
 param(
-    [switch]$Install
+    [switch]$Install,
+    [ValidateRange(1, 30)]
+    [int]$CertificateValidityYears = 10,
+    [ValidateNotNullOrEmpty()]
+    [string]$TimestampUrl = 'http://timestamp.digicert.com'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,8 +66,14 @@ if ($LASTEXITCODE -ne 0) { throw "MSIX packaging failed.`n$($makeOutput -join "`
 Write-Host 'MSIX package created.'
 
 $publisher = 'CN=CreateYourTile.Dev'
+$minimumCertificateLifetime = [TimeSpan]::FromDays(($CertificateValidityYears * 365) - 30)
 $certificate = Get-ChildItem Cert:\CurrentUser\My |
-    Where-Object { $_.Subject -eq $publisher -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date).AddDays(30) } |
+    Where-Object {
+        $_.Subject -eq $publisher -and
+        $_.HasPrivateKey -and
+        $_.NotAfter -gt (Get-Date).AddDays(30) -and
+        ($_.NotAfter - $_.NotBefore) -ge $minimumCertificateLifetime
+    } |
     Sort-Object NotAfter -Descending |
     Select-Object -First 1
 
@@ -77,13 +87,15 @@ if (-not $certificate) {
         -KeyLength 2048 `
         -HashAlgorithm SHA256 `
         -KeyUsage DigitalSignature `
+        -NotAfter (Get-Date).AddYears($CertificateValidityYears) `
         -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3')
 }
 
 Export-Certificate -Cert $certificate -FilePath $certificatePath -Force | Out-Null
-$signOutput = & $signTool sign /fd SHA256 /sha1 $certificate.Thumbprint /s My $packagePath 2>&1
+$signOutput = & $signTool sign /fd SHA256 /sha1 $certificate.Thumbprint /s My `
+    /tr $TimestampUrl /td SHA256 $packagePath 2>&1
 if ($LASTEXITCODE -ne 0) { throw "MSIX signing failed.`n$($signOutput -join "`n")" }
-Write-Host 'MSIX package signed.'
+Write-Host "MSIX package signed with a $CertificateValidityYears-year certificate and an RFC 3161 timestamp."
 
 $null = & $signTool verify /pa $packagePath 2>&1
 $verifyExitCode = $LASTEXITCODE

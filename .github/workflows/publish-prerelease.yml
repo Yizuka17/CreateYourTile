@@ -76,7 +76,6 @@ jobs:
             '.\artifacts\release\SHA256SUMS.txt' `
             --repo '${{ github.repository }}' `
             --title 'CreateYourTile! ${{ github.ref_name }} 预览版' `
-            --notes-file '.\.github\release-notes-v1.4.0.md' `
+            --notes-file '.\.github\release-notes-v1.5.0.md' `
             --prerelease `
             --verify-tag
-

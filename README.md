@@ -11,6 +11,7 @@
 - 已安装应用列表显示 Windows Shell 原生图标；选择应用时自动把该图标作为初始磁贴图片。
 - Steam 等 `.url` URI 快捷方式会读取 `IconFile`/`IconIndex`，优先使用游戏或网站的专属图标。
 - 界面使用 ModernWpf 提供的 Windows 10 Fluent/UWP 控件样式；强调色跟随 Windows 系统强调色，深浅模式跟随“选择默认应用模式”，运行中修改设置也会自动刷新。
+- 面向触屏提供不小于 40 像素的操作目标、可触摸拖动和惯性滚动、易触控滑块与下拉项，并在较窄窗口中自动切换为上下布局。
 - 图片与启动配置全部存放在当前用户的本地应用数据中；无网络请求、无服务器、无常驻后台。
 - 对同一“名称 + 目标”再次注册时更新已有磁贴。
 - 未打包开发版自动创建开始菜单快捷方式；安装 MSIX 后使用 Windows 官方 SecondaryTile 接口。
@@ -25,7 +26,7 @@ dotnet build .\CreateYourTile.csproj
 .\scripts\Install-Package.ps1
 ```
 
-`Build-Package.ps1` 会生成自签名的本地开发证书、签名 MSIX，并把产物放在 `artifacts\msix`。安装脚本会通过 UAC 请求管理员权限，把该公钥证书加入本机 `TrustedPeople` 后安装 MSIX；不需要服务器。
+`Build-Package.ps1` 默认生成有效期 10 年的自签名本地开发证书，并使用 SHA-256 RFC 3161 时间戳签名 MSIX，再把产物放在 `artifacts\msix`。可通过 `-CertificateValidityYears` 调整证书年限。安装脚本会通过 UAC 请求管理员权限，把该公钥证书加入本机 `TrustedPeople` 后安装 MSIX；不需要服务器。
 
 ## 系统限制
 

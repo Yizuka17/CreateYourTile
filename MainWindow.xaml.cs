@@ -10,8 +10,10 @@ namespace CreateYourTile;
 
 public partial class MainWindow : Window
 {
+    private const double CompactLayoutThreshold = 980;
     private BitmapSource? _sourceImage;
     private string? _sourceImagePath;
+    private bool _isCompactLayout;
 
     public MainWindow()
     {
@@ -22,7 +24,73 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         NameTextBox.Text = "我的磁贴";
+        UpdateResponsiveLayout(ActualWidth);
         UpdatePreview();
+    }
+
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (IsLoaded)
+        {
+            UpdateResponsiveLayout(e.NewSize.Width);
+        }
+    }
+
+    private void UpdateResponsiveLayout(double width)
+    {
+        var useCompactLayout = width < CompactLayoutThreshold;
+        if (_isCompactLayout == useCompactLayout)
+        {
+            return;
+        }
+
+        _isCompactLayout = useCompactLayout;
+        if (useCompactLayout)
+        {
+            PreviewColumn.Width = new GridLength(1, GridUnitType.Star);
+            LeftGapColumn.Width = new GridLength(0);
+            DividerColumn.Width = new GridLength(0);
+            RightGapColumn.Width = new GridLength(0);
+            SettingsColumn.Width = new GridLength(0);
+
+            PreviewContentRow.Height = new GridLength(1, GridUnitType.Star);
+            ResponsiveGapRow.Height = new GridLength(25);
+            SettingsContentRow.Height = new GridLength(1.15, GridUnitType.Star);
+
+            Grid.SetRow(PreviewPanel, 0);
+            Grid.SetColumn(PreviewPanel, 0);
+            Grid.SetRow(ContentDivider, 1);
+            Grid.SetColumn(ContentDivider, 0);
+            Grid.SetRow(SettingsPanel, 2);
+            Grid.SetColumn(SettingsPanel, 0);
+            ContentDivider.Width = double.NaN;
+            ContentDivider.Height = 1;
+            ContentDivider.HorizontalAlignment = HorizontalAlignment.Stretch;
+            ContentDivider.VerticalAlignment = VerticalAlignment.Center;
+        }
+        else
+        {
+            PreviewColumn.Width = new GridLength(390);
+            LeftGapColumn.Width = new GridLength(30);
+            DividerColumn.Width = new GridLength(1);
+            RightGapColumn.Width = new GridLength(30);
+            SettingsColumn.Width = new GridLength(1, GridUnitType.Star);
+
+            PreviewContentRow.Height = new GridLength(1, GridUnitType.Star);
+            ResponsiveGapRow.Height = new GridLength(0);
+            SettingsContentRow.Height = new GridLength(0);
+
+            Grid.SetRow(PreviewPanel, 0);
+            Grid.SetColumn(PreviewPanel, 0);
+            Grid.SetRow(ContentDivider, 0);
+            Grid.SetColumn(ContentDivider, 2);
+            Grid.SetRow(SettingsPanel, 0);
+            Grid.SetColumn(SettingsPanel, 4);
+            ContentDivider.Width = 1;
+            ContentDivider.Height = double.NaN;
+            ContentDivider.HorizontalAlignment = HorizontalAlignment.Center;
+            ContentDivider.VerticalAlignment = VerticalAlignment.Stretch;
+        }
     }
 
     private void ChooseImageButton_Click(object sender, RoutedEventArgs e)
