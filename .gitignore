@@ -1,0 +1,59 @@
+# Build and package outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+TestResults/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appxsym
+*.cer
+*.pfx
+*.p12
+*.snk
+
+# IDE and user-local settings
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+_ReSharper*/
+
+# Logs, temporary files, and screenshots
+*.log
+*.tmp
+*.temp
+*.bak
+*.cache
+Snipaste_*.png
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+secrets.*
+*.secret
+*.key
+*.pem
+credentials*.json
+
+# Local AI/Codex context and agent instructions
+.codex/
+.openai/
+codex-*
+*.codex.*
+AGENTS.md
+MEMORY.md
+SESSION.md
+
