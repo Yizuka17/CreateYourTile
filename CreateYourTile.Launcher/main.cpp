@@ -386,6 +386,135 @@ namespace
             target.compare(0, 2, L"\\\\") == 0 ||
             target.find(L"://") != std::wstring::npos;
     }
+
+    enum class ShortcutLaunchResult
+    {
+        NotElevatedShortcut,
+        Succeeded,
+        Failed
+    };
+
+    bool EndsWithIgnoreCase(const std::wstring& value, const std::wstring& suffix)
+    {
+        return value.size() >= suffix.size() &&
+            _wcsicmp(value.c_str() + value.size() - suffix.size(), suffix.c_str()) == 0;
+    }
+
+    std::wstring ExpandEnvironmentPath(const std::wstring& value)
+    {
+        if (value.empty())
+        {
+            return value;
+        }
+        DWORD required = ExpandEnvironmentStringsW(value.c_str(), nullptr, 0);
+        if (required == 0)
+        {
+            return value;
+        }
+        std::vector<wchar_t> expanded(required);
+        if (ExpandEnvironmentStringsW(value.c_str(), expanded.data(), required) == 0)
+        {
+            return value;
+        }
+        return std::wstring(expanded.data());
+    }
+
+    ShortcutLaunchResult LaunchElevatedShortcutIfRequested(
+        const std::wstring& shortcutPath,
+        const std::wstring& additionalArguments)
+    {
+        if (!EndsWithIgnoreCase(shortcutPath, L".lnk"))
+        {
+            return ShortcutLaunchResult::NotElevatedShortcut;
+        }
+
+        IShellLinkW* shellLink = nullptr;
+        HRESULT result = CoCreateInstance(
+            CLSID_ShellLink,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&shellLink));
+        if (FAILED(result))
+        {
+            return ShortcutLaunchResult::NotElevatedShortcut;
+        }
+
+        IPersistFile* persistFile = nullptr;
+        result = shellLink->QueryInterface(IID_PPV_ARGS(&persistFile));
+        if (SUCCEEDED(result))
+        {
+            result = persistFile->Load(shortcutPath.c_str(), STGM_READ);
+        }
+        if (persistFile != nullptr)
+        {
+            persistFile->Release();
+        }
+        if (FAILED(result))
+        {
+            shellLink->Release();
+            return ShortcutLaunchResult::NotElevatedShortcut;
+        }
+
+        IShellLinkDataList* dataList = nullptr;
+        DWORD flags = 0;
+        result = shellLink->QueryInterface(IID_PPV_ARGS(&dataList));
+        if (SUCCEEDED(result))
+        {
+            result = dataList->GetFlags(&flags);
+        }
+        if (dataList != nullptr)
+        {
+            dataList->Release();
+        }
+        if (FAILED(result) || (flags & SLDF_RUNAS_USER) == 0)
+        {
+            shellLink->Release();
+            return ShortcutLaunchResult::NotElevatedShortcut;
+        }
+
+        wchar_t targetBuffer[32768] = {};
+        wchar_t argumentsBuffer[32768] = {};
+        wchar_t workingDirectoryBuffer[32768] = {};
+        WIN32_FIND_DATAW targetData = {};
+        HRESULT targetResult = shellLink->GetPath(
+            targetBuffer,
+            ARRAYSIZE(targetBuffer),
+            &targetData,
+            SLGP_UNCPRIORITY);
+        shellLink->GetArguments(argumentsBuffer, ARRAYSIZE(argumentsBuffer));
+        shellLink->GetWorkingDirectory(
+            workingDirectoryBuffer,
+            ARRAYSIZE(workingDirectoryBuffer));
+        shellLink->Release();
+
+        std::wstring target = SUCCEEDED(targetResult) && targetBuffer[0] != L'\0'
+            ? ExpandEnvironmentPath(targetBuffer)
+            : shortcutPath;
+        std::wstring parameters = argumentsBuffer;
+        if (!additionalArguments.empty())
+        {
+            if (!parameters.empty())
+            {
+                parameters += L" ";
+            }
+            parameters += additionalArguments;
+        }
+        std::wstring workingDirectory = ExpandEnvironmentPath(workingDirectoryBuffer);
+        const wchar_t* parameterPointer = parameters.empty() ? nullptr : parameters.c_str();
+        const wchar_t* directoryPointer = workingDirectory.empty()
+            ? nullptr
+            : workingDirectory.c_str();
+        HINSTANCE launchResult = ShellExecuteW(
+            nullptr,
+            L"runas",
+            target.c_str(),
+            parameterPointer,
+            directoryPointer,
+            SW_SHOWNORMAL);
+        return reinterpret_cast<INT_PTR>(launchResult) > 32
+            ? ShortcutLaunchResult::Succeeded
+            : ShortcutLaunchResult::Failed;
+    }
 }
 
 int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
@@ -447,6 +576,13 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
     {
         CoUninitialize();
         return 3;
+    }
+
+    ShortcutLaunchResult shortcutResult = LaunchElevatedShortcutIfRequested(target, arguments);
+    if (shortcutResult != ShortcutLaunchResult::NotElevatedShortcut)
+    {
+        CoUninitialize();
+        return shortcutResult == ShortcutLaunchResult::Succeeded ? 0 : 4;
     }
 
     if (kind == L"AppId")
