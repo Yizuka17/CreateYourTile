@@ -86,12 +86,17 @@ if ($LASTEXITCODE -ne 0) { throw "MSIX signing failed.`n$($signOutput -join "`n"
 Write-Host 'MSIX package signed.'
 
 $null = & $signTool verify /pa $packagePath 2>&1
-if ($LASTEXITCODE -eq 0) {
+$verifyExitCode = $LASTEXITCODE
+if ($verifyExitCode -eq 0) {
     Write-Host 'MSIX signature and trust chain verified.'
 }
 else {
-    Write-Warning 'The signature is present, but its self-signed development certificate is not trusted yet. Run Install-Package.ps1 to trust it for the current user and install the app.'
+    Write-Warning 'The signature is present, but its self-signed development certificate is not trusted yet. Run Install-Package.ps1 to trust it in the local machine TrustedPeople store and install the app.'
 }
+
+# An untrusted self-signed root is expected before Install-Package.ps1 runs.
+# Do not leak signtool's verification code as the PowerShell process exit code.
+$global:LASTEXITCODE = 0
 
 if ($Install) {
     & (Join-Path $projectRoot 'scripts\Install-Package.ps1')
