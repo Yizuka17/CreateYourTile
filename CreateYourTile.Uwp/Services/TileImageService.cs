@@ -47,20 +47,30 @@ namespace CreateYourTile.Uwp.Services
                 double cropHeight = Math.Max(1, baseCropHeight / zoom);
                 double maxLeft = Math.Max(0, sourceWidth - cropWidth);
                 double maxTop = Math.Max(0, sourceHeight - cropHeight);
-                uint left = (uint)Math.Round(maxLeft * (offsetX + 1) / 2);
-                uint top = (uint)Math.Round(maxTop * (offsetY + 1) / 2);
+                double left = maxLeft * (offsetX + 1) / 2;
+                double top = maxTop * (offsetY + 1) / 2;
+
+                // BitmapTransform applies scaling before Bounds. Bounds therefore
+                // uses coordinates in the scaled bitmap, not the source bitmap.
+                // Keeping source-space bounds here makes small Store icons return
+                // fewer pixels than BitmapEncoder.SetPixelData expects.
+                double scale = Math.Max(outputWidth / cropWidth, outputHeight / cropHeight);
+                uint scaledWidth = Math.Max(outputWidth, (uint)Math.Ceiling(sourceWidth * scale));
+                uint scaledHeight = Math.Max(outputHeight, (uint)Math.Ceiling(sourceHeight * scale));
+                uint boundsX = Math.Min((uint)Math.Round(left * scale), scaledWidth - outputWidth);
+                uint boundsY = Math.Min((uint)Math.Round(top * scale), scaledHeight - outputHeight);
 
                 BitmapTransform transform = new BitmapTransform
                 {
                     Bounds = new BitmapBounds
                     {
-                        X = left,
-                        Y = top,
-                        Width = Math.Min((uint)Math.Round(cropWidth), decoder.PixelWidth - left),
-                        Height = Math.Min((uint)Math.Round(cropHeight), decoder.PixelHeight - top)
+                        X = boundsX,
+                        Y = boundsY,
+                        Width = outputWidth,
+                        Height = outputHeight
                     },
-                    ScaledWidth = outputWidth,
-                    ScaledHeight = outputHeight,
+                    ScaledWidth = scaledWidth,
+                    ScaledHeight = scaledHeight,
                     InterpolationMode = BitmapInterpolationMode.Fant
                 };
 
@@ -77,6 +87,12 @@ namespace CreateYourTile.Uwp.Services
                 using (IRandomAccessStream output = await outputFile.OpenAsync(FileAccessMode.ReadWrite))
                 {
                     BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output);
+                    byte[] pixels = provider.DetachPixelData();
+                    int expectedLength = checked((int)(outputWidth * outputHeight * 4));
+                    if (pixels.Length != expectedLength)
+                    {
+                        throw new InvalidOperationException("图片解码后的像素缓冲区尺寸不正确。");
+                    }
                     encoder.SetPixelData(
                         BitmapPixelFormat.Bgra8,
                         BitmapAlphaMode.Premultiplied,
@@ -84,7 +100,7 @@ namespace CreateYourTile.Uwp.Services
                         outputHeight,
                         96,
                         96,
-                        provider.DetachPixelData());
+                        pixels);
                     await encoder.FlushAsync();
                 }
 
