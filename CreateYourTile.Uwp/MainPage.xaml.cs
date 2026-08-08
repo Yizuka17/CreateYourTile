@@ -549,8 +549,8 @@ namespace CreateYourTile.Uwp
             double imageHeight = _sourcePixelHeight * scale;
             double overflowX = Math.Max(0, imageWidth - frameWidth);
             double overflowY = Math.Max(0, imageHeight - frameHeight);
-            double left = -overflowX / 2 - OffsetXSlider.Value * overflowX / 2;
-            double top = -overflowY / 2 - OffsetYSlider.Value * overflowY / 2;
+            double left = (frameWidth - imageWidth) / 2 - OffsetXSlider.Value * overflowX / 2;
+            double top = (frameHeight - imageHeight) / 2 - OffsetYSlider.Value * overflowY / 2;
 
             PreviewImage.Width = imageWidth;
             PreviewImage.Height = imageHeight;

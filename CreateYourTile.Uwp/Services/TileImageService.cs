@@ -18,7 +18,7 @@ namespace CreateYourTile.Uwp.Services
             double offsetX,
             double offsetY)
         {
-            zoom = Limit(zoom, 1, 4);
+            zoom = Limit(zoom, 0.1, 4);
             offsetX = Limit(offsetX, -1, 1);
             offsetY = Limit(offsetY, -1, 1);
 
@@ -27,6 +27,23 @@ namespace CreateYourTile.Uwp.Services
                 BitmapDecoder decoder = await BitmapDecoder.CreateAsync(input);
                 double sourceWidth = decoder.PixelWidth;
                 double sourceHeight = decoder.PixelHeight;
+                if (zoom < 1)
+                {
+                    byte[] zoomedOutPixels = await RenderZoomedOutPixelsAsync(
+                        decoder,
+                        outputWidth,
+                        outputHeight,
+                        zoom,
+                        offsetX,
+                        offsetY);
+                    return await EncodePngAsync(
+                        outputFolder,
+                        outputName,
+                        outputWidth,
+                        outputHeight,
+                        zoomedOutPixels);
+                }
+
                 double outputAspect = (double)outputWidth / outputHeight;
                 double sourceAspect = sourceWidth / sourceHeight;
 
@@ -81,31 +98,128 @@ namespace CreateYourTile.Uwp.Services
                     ExifOrientationMode.RespectExifOrientation,
                     ColorManagementMode.ColorManageToSRgb);
 
-                StorageFile outputFile = await outputFolder.CreateFileAsync(
-                    outputName,
-                    CreationCollisionOption.ReplaceExisting);
-                using (IRandomAccessStream output = await outputFile.OpenAsync(FileAccessMode.ReadWrite))
+                byte[] pixels = provider.DetachPixelData();
+                int expectedLength = checked((int)(outputWidth * outputHeight * 4));
+                if (pixels.Length != expectedLength)
                 {
-                    BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output);
-                    byte[] pixels = provider.DetachPixelData();
-                    int expectedLength = checked((int)(outputWidth * outputHeight * 4));
-                    if (pixels.Length != expectedLength)
-                    {
-                        throw new InvalidOperationException("图片解码后的像素缓冲区尺寸不正确。");
-                    }
-                    encoder.SetPixelData(
-                        BitmapPixelFormat.Bgra8,
-                        BitmapAlphaMode.Premultiplied,
-                        outputWidth,
-                        outputHeight,
-                        96,
-                        96,
-                        pixels);
-                    await encoder.FlushAsync();
+                    throw new InvalidOperationException("图片解码后的像素缓冲区尺寸不正确。");
                 }
-
-                return outputFile;
+                return await EncodePngAsync(
+                    outputFolder,
+                    outputName,
+                    outputWidth,
+                    outputHeight,
+                    pixels);
             }
+        }
+
+        private static async Task<byte[]> RenderZoomedOutPixelsAsync(
+            BitmapDecoder decoder,
+            uint outputWidth,
+            uint outputHeight,
+            double zoom,
+            double offsetX,
+            double offsetY)
+        {
+            double scale = Math.Max(
+                outputWidth / (double)decoder.PixelWidth,
+                outputHeight / (double)decoder.PixelHeight) * zoom;
+            uint scaledWidth = ToScaledDimension(decoder.PixelWidth * scale);
+            uint scaledHeight = ToScaledDimension(decoder.PixelHeight * scale);
+            long imageLeft = (long)Math.Round(
+                (outputWidth - (double)scaledWidth) / 2 -
+                offsetX * Math.Max(0, scaledWidth - (double)outputWidth) / 2);
+            long imageTop = (long)Math.Round(
+                (outputHeight - (double)scaledHeight) / 2 -
+                offsetY * Math.Max(0, scaledHeight - (double)outputHeight) / 2);
+
+            uint destinationX = (uint)Math.Max(0, imageLeft);
+            uint destinationY = (uint)Math.Max(0, imageTop);
+            uint sourceX = (uint)Math.Max(0, -imageLeft);
+            uint sourceY = (uint)Math.Max(0, -imageTop);
+            uint copyWidth = (uint)Math.Min(
+                (long)scaledWidth - sourceX,
+                (long)outputWidth - destinationX);
+            uint copyHeight = (uint)Math.Min(
+                (long)scaledHeight - sourceY,
+                (long)outputHeight - destinationY);
+
+            BitmapTransform transform = new BitmapTransform
+            {
+                Bounds = new BitmapBounds
+                {
+                    X = sourceX,
+                    Y = sourceY,
+                    Width = copyWidth,
+                    Height = copyHeight
+                },
+                ScaledWidth = scaledWidth,
+                ScaledHeight = scaledHeight,
+                InterpolationMode = BitmapInterpolationMode.Fant
+            };
+            PixelDataProvider provider = await decoder.GetPixelDataAsync(
+                BitmapPixelFormat.Bgra8,
+                BitmapAlphaMode.Premultiplied,
+                transform,
+                ExifOrientationMode.RespectExifOrientation,
+                ColorManagementMode.ColorManageToSRgb);
+            byte[] sourcePixels = provider.DetachPixelData();
+            int expectedSourceLength = checked((int)(copyWidth * copyHeight * 4));
+            if (sourcePixels.Length != expectedSourceLength)
+            {
+                throw new InvalidOperationException("缩小图片后的像素缓冲区尺寸不正确。");
+            }
+
+            byte[] outputPixels = new byte[checked((int)(outputWidth * outputHeight * 4))];
+            for (int index = 0; index < outputPixels.Length; index += 4)
+            {
+                outputPixels[index] = 17;
+                outputPixels[index + 1] = 17;
+                outputPixels[index + 2] = 17;
+                outputPixels[index + 3] = 255;
+            }
+            int sourceStride = checked((int)(copyWidth * 4));
+            for (uint row = 0; row < copyHeight; row++)
+            {
+                System.Buffer.BlockCopy(
+                    sourcePixels,
+                    checked((int)(row * copyWidth * 4)),
+                    outputPixels,
+                    checked((int)((destinationY + row) * outputWidth * 4 + destinationX * 4)),
+                    sourceStride);
+            }
+            return outputPixels;
+        }
+
+        private static uint ToScaledDimension(double value)
+        {
+            return (uint)Math.Max(1, Math.Min(uint.MaxValue, Math.Ceiling(value)));
+        }
+
+        private static async Task<StorageFile> EncodePngAsync(
+            StorageFolder outputFolder,
+            string outputName,
+            uint outputWidth,
+            uint outputHeight,
+            byte[] pixels)
+        {
+            StorageFile outputFile = await outputFolder.CreateFileAsync(
+                outputName,
+                CreationCollisionOption.ReplaceExisting);
+            using (IRandomAccessStream output = await outputFile.OpenAsync(FileAccessMode.ReadWrite))
+            {
+                BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output);
+                encoder.SetPixelData(
+                    BitmapPixelFormat.Bgra8,
+                    BitmapAlphaMode.Premultiplied,
+                    outputWidth,
+                    outputHeight,
+                    96,
+                    96,
+                    pixels);
+                await encoder.FlushAsync();
+            }
+            return outputFile;
         }
 
         public static async Task<StorageFile> CopyStreamToTemporaryFileAsync(

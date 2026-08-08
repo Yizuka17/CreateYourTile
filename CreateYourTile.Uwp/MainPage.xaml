@@ -125,7 +125,7 @@
                                 <ColumnDefinition Width="46" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="缩放" VerticalAlignment="Center" />
-                            <Slider x:Name="ZoomSlider" Grid.Column="1" Minimum="1" Maximum="4"
+                            <Slider x:Name="ZoomSlider" Grid.Column="1" Minimum="0.1" Maximum="4"
                                     Value="1" StepFrequency="0.1" MinHeight="44"
                                     ValueChanged="CropControl_ValueChanged" />
                             <TextBlock x:Name="ZoomValueText" Grid.Column="2" Text="1.0×"
