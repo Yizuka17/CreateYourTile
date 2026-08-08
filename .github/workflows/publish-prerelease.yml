@@ -1,0 +1,82 @@
+name: Publish prerelease
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build and sign MSIX
+        shell: pwsh
+        run: .\scripts\Build-Package.ps1
+
+      - name: Assemble release assets
+        shell: pwsh
+        run: |
+          $releaseRoot = Join-Path $PWD 'artifacts\release'
+          $bundleRoot = Join-Path $releaseRoot 'CreateYourTile-${{ github.ref_name }}-win-x64'
+          $zipPath = "$bundleRoot.zip"
+
+          New-Item -ItemType Directory -Path $bundleRoot -Force | Out-Null
+          Copy-Item '.\artifacts\msix\CreateYourTile-x64.msix' $bundleRoot
+          Copy-Item '.\artifacts\msix\CreateYourTile-Dev.cer' $bundleRoot
+          Copy-Item '.\scripts\Install-Package.ps1' $bundleRoot
+
+          @'
+          CreateYourTile! prerelease
+
+          系统要求：Windows 10 1809 或更高版本，x64。
+
+          安装方法：
+          1. 保持本目录内的 MSIX、CER 和 Install-Package.ps1 位于同一目录。
+          2. 右键 Install-Package.ps1，选择“使用 PowerShell 运行”；也可以执行：
+             powershell -ExecutionPolicy Bypass -File .\Install-Package.ps1
+          3. 接受 UAC 管理员权限提示。脚本会把自签名开发证书导入本机 TrustedPeople，随后安装 MSIX。
+
+          注意：这是使用自签名开发证书发布的预览版本，仅应安装来自本项目 GitHub Release 的原始文件。
+          '@ | Set-Content (Join-Path $bundleRoot 'README.txt') -Encoding utf8
+
+          Compress-Archive -Path (Join-Path $bundleRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal -Force
+
+          $assets = @(
+            $zipPath,
+            (Join-Path $PWD 'artifacts\msix\CreateYourTile-x64.msix'),
+            (Join-Path $PWD 'artifacts\msix\CreateYourTile-Dev.cer')
+          )
+          $hashes = foreach ($asset in $assets) {
+            $hash = Get-FileHash -Algorithm SHA256 $asset
+            '{0}  {1}' -f $hash.Hash, (Split-Path $asset -Leaf)
+          }
+          $hashes | Set-Content (Join-Path $releaseRoot 'SHA256SUMS.txt') -Encoding ascii
+
+      - name: Publish GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create '${{ github.ref_name }}' `
+            '.\artifacts\release\CreateYourTile-${{ github.ref_name }}-win-x64.zip' `
+            '.\artifacts\msix\CreateYourTile-x64.msix' `
+            '.\artifacts\msix\CreateYourTile-Dev.cer' `
+            '.\artifacts\release\SHA256SUMS.txt' `
+            --repo '${{ github.repository }}' `
+            --title 'CreateYourTile! ${{ github.ref_name }} 预览版' `
+            --notes-file '.\.github\release-notes-v1.4.0.md' `
+            --prerelease `
+            --verify-tag
+
