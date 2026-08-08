@@ -74,7 +74,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if (gh release view '${{ github.ref_name }}' --repo '${{ github.repository }}' *> $null) {
+          gh release view '${{ github.ref_name }}' --repo '${{ github.repository }}' *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
             gh release edit '${{ github.ref_name }}' `
               --repo '${{ github.repository }}' `
               --title 'CreateYourTile! ${{ github.ref_name }} UWP 预览版' `
