@@ -1,0 +1,244 @@
+<Page
+    x:Class="CreateYourTile.Uwp.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CreateYourTile.Uwp"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+    SizeChanged="Page_SizeChanged">
+
+    <Page.Resources>
+        <DataTemplate x:Key="InstalledAppTemplate">
+            <Grid MinHeight="64" Padding="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="44" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40"
+                        Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+                    <Image Source="{Binding Icon}" Width="36" Height="36" Stretch="Uniform" />
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Target}" Margin="0,3,0,0" FontSize="11"
+                               Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid Padding="28,24,28,18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="26" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="CreateYourTile!" FontSize="38" FontWeight="SemiLight" />
+            <TextBlock Text="在 Windows 10 创建并固定 Live Tile"
+                       Margin="0,3,0,0"
+                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
+        </StackPanel>
+
+        <Grid x:Name="ContentGrid" Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="PreviewContentRow" Height="*" />
+                <RowDefinition x:Name="ResponsiveGapRow" Height="0" />
+                <RowDefinition x:Name="SettingsContentRow" Height="0" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="PreviewColumn" Width="390" />
+                <ColumnDefinition x:Name="LeftGapColumn" Width="30" />
+                <ColumnDefinition x:Name="DividerColumn" Width="1" />
+                <ColumnDefinition x:Name="RightGapColumn" Width="30" />
+                <ColumnDefinition x:Name="SettingsColumn" Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Grid x:Name="PreviewPane" Grid.Row="0" Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="16" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="预览" FontSize="24" FontWeight="SemiBold" />
+
+                <ScrollViewer x:Name="PreviewScroller"
+                              Grid.Row="2"
+                              VerticalScrollMode="Enabled"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollMode="Disabled"
+                              HorizontalScrollBarVisibility="Disabled"
+                              IsVerticalRailEnabled="True"
+                              ZoomMode="Disabled">
+                    <StackPanel Margin="0,0,12,12">
+                        <Grid HorizontalAlignment="Center">
+                            <Grid x:Name="PreviewFrame" Width="300" Height="300"
+                                  Background="#111111">
+                                <Canvas x:Name="PreviewCanvas" Width="300" Height="300">
+                                    <Image x:Name="PreviewImage" Stretch="Fill" />
+                                </Canvas>
+                                <Border x:Name="PreviewNamePanel" VerticalAlignment="Bottom"
+                                        Background="#99000000" Padding="12,9">
+                                    <TextBlock x:Name="PreviewName" Text="磁贴名称"
+                                               Foreground="White" FontSize="15" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Border>
+                                <TextBlock x:Name="EmptyImageHint" Text="选择一张图片后在这里预览"
+                                           Foreground="#B5B5B5" HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Grid>
+
+                        <Grid Margin="0,20,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="ChooseImageButton" Content="选择图片"
+                                    Style="{StaticResource TouchButtonStyle}"
+                                    Click="ChooseImageButton_Click" />
+                            <TextBlock x:Name="ImagePathText" Grid.Column="2" Text="尚未选择"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
+                        </Grid>
+
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="46" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="缩放" VerticalAlignment="Center" />
+                            <Slider x:Name="ZoomSlider" Grid.Column="1" Minimum="1" Maximum="4"
+                                    Value="1" StepFrequency="0.1" MinHeight="44"
+                                    ValueChanged="CropControl_ValueChanged" />
+                            <TextBlock x:Name="ZoomValueText" Grid.Column="2" Text="1.0×"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="左右" VerticalAlignment="Center" />
+                            <Slider x:Name="OffsetXSlider" Grid.Column="1" Minimum="-1" Maximum="1"
+                                    Value="0" StepFrequency="0.05" MinHeight="44"
+                                    ValueChanged="CropControl_ValueChanged" />
+                        </Grid>
+
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="上下" VerticalAlignment="Center" />
+                            <Slider x:Name="OffsetYSlider" Grid.Column="1" Minimum="-1" Maximum="1"
+                                    Value="0" StepFrequency="0.05" MinHeight="44"
+                                    ValueChanged="CropControl_ValueChanged" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Border x:Name="ContentDivider" Grid.Row="0" Grid.Column="2" Width="1"
+                    Background="{ThemeResource SystemControlForegroundBaseLowBrush}" />
+
+            <Grid x:Name="SettingsPane" Grid.Row="0" Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="16" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="16" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="磁贴设置" FontSize="24" FontWeight="SemiBold" />
+
+                <ScrollViewer x:Name="SettingsScroller"
+                              Grid.Row="2"
+                              VerticalScrollMode="Enabled"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollMode="Disabled"
+                              HorizontalScrollBarVisibility="Disabled"
+                              IsVerticalRailEnabled="True"
+                              ZoomMode="Disabled">
+                    <StackPanel Margin="0,0,12,12">
+                        <TextBox x:Name="NameTextBox" Header="名称" MaxLength="80"
+                                 Style="{StaticResource TouchTextBoxStyle}"
+                                 TextChanged="NameTextBox_TextChanged" />
+
+                        <ComboBox x:Name="TargetKindComboBox" Header="打开类型" Margin="0,14,0,0"
+                                  HorizontalAlignment="Stretch" SelectedIndex="0"
+                                  Style="{StaticResource TouchComboBoxStyle}"
+                                  SelectionChanged="TargetKindComboBox_SelectionChanged">
+                            <ComboBoxItem Content="程序、文件或文件夹" Tag="File" />
+                            <ComboBoxItem Content="网址或 URI" Tag="Uri" />
+                            <ComboBoxItem Content="Microsoft Store 应用 AUMID" Tag="AppId" />
+                        </ComboBox>
+
+                        <TextBox x:Name="TargetTextBox" Header="目标" Margin="0,14,0,0"
+                                 Style="{StaticResource TouchTextBoxStyle}" />
+
+                        <StackPanel x:Name="TargetPickerButtons" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="BrowseTargetButton" Content="选择文件…"
+                                    Style="{StaticResource TouchButtonStyle}"
+                                    Click="BrowseTargetButton_Click" />
+                            <Button x:Name="BrowseFolderButton" Content="选择文件夹…" Margin="8,0,0,0"
+                                    Style="{StaticResource TouchButtonStyle}"
+                                    Click="BrowseFolderButton_Click" />
+                            <Button x:Name="ChooseInstalledAppButton" Content="已安装应用…" Margin="8,0,0,0"
+                                    Style="{StaticResource TouchButtonStyle}"
+                                    Click="ChooseInstalledAppButton_Click" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="TargetHelpText"
+                                   Text="支持磁盘、文件夹、文件、程序和快捷方式。"
+                                   Margin="0,7,0,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
+
+                        <TextBox x:Name="ArgumentsTextBox" Header="启动参数（可选）" Margin="0,14,0,0"
+                                 Style="{StaticResource TouchTextBoxStyle}" />
+
+                        <ComboBox x:Name="TileSizeComboBox" Header="默认磁贴尺寸" Margin="0,14,0,0"
+                                  HorizontalAlignment="Stretch" SelectedIndex="1"
+                                  Style="{StaticResource TouchComboBoxStyle}"
+                                  SelectionChanged="TileSizeComboBox_SelectionChanged">
+                            <ComboBoxItem Content="小 (71 × 71)" Tag="Small" />
+                            <ComboBoxItem Content="中 (150 × 150)" Tag="Medium" />
+                            <ComboBoxItem Content="宽 (310 × 150)" Tag="Wide" />
+                            <ComboBoxItem Content="大 (310 × 310)" Tag="Large" />
+                        </ComboBox>
+
+                        <CheckBox x:Name="ShowNameCheckBox" Content="在磁贴上显示名称"
+                                  IsChecked="True" MinHeight="40" Margin="0,14,0,0"
+                                  Checked="ShowNameCheckBox_Changed"
+                                  Unchecked="ShowNameCheckBox_Changed" />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Button x:Name="RegisterButton" Grid.Row="4"
+                        Content="注册并固定到“开始”"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource TouchAccentButtonStyle}"
+                        Click="RegisterButton_Click" />
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="4" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}"
+                BorderThickness="0,1,0,0" Padding="0,10,0,0">
+            <TextBlock x:Name="StatusText" Text="就绪" TextWrapping="Wrap"
+                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
+        </Border>
+    </Grid>
+</Page>

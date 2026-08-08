@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="mp uap desktop rescap">
+
+  <Identity Name="CreateYourTile.Local" Publisher="CN=CreateYourTile.Dev" Version="1.5.0.2" ProcessorArchitecture="x64" />
+  <mp:PhoneIdentity PhoneProductId="28558ffa-ba40-4b9c-a546-2fa34d29f5f2"
+                    PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+
+  <Properties>
+    <DisplayName>CreateYourTile!</DisplayName>
+    <PublisherDisplayName>CreateYourTile!</PublisherDisplayName>
+    <Description>在 Windows 10 创建并固定 Live Tile。</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
+      <uap:VisualElements
+        DisplayName="CreateYourTile!"
+        Description="在 Windows 10 创建并固定 Live Tile"
+        BackgroundColor="#F3F3F3"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        Square150x150Logo="Assets\Square150x150Logo.png">
+        <uap:DefaultTile
+          ShortName="CreateYourTile!"
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <desktop:Extension Category="windows.fullTrustProcess"
+                           Executable="CreateYourTile.Launcher\CreateYourTile.Launcher.exe" />
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="packageQuery" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

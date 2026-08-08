@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '15.0'">
+    <VisualStudioVersion>15.0</VisualStudioVersion>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup>
+    <WapProjPath Condition="'$(WapProjPath)'==''">$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\</WapProjPath>
+  </PropertyGroup>
+  <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.props" />
+
+  <PropertyGroup>
+    <ProjectGuid>{28558FFA-BA40-4B9C-A546-2FA34D29F5F2}</ProjectGuid>
+    <TargetPlatformVersion>10.0.22621.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <DefaultLanguage>zh-CN</DefaultLanguage>
+    <EntryPointProjectUniqueName>..\CreateYourTile.Uwp\CreateYourTile.Uwp.csproj</EntryPointProjectUniqueName>
+    <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxAutoIncrementPackageRevision>false</AppxAutoIncrementPackageRevision>
+    <AppxBundle>Never</AppxBundle>
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
+    <UapAppxPackageBuildMode>SideloadOnly</UapAppxPackageBuildMode>
+    <GenerateTestArtifacts>true</GenerateTestArtifacts>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
+    <Content Include="..\CreateYourTile.Uwp\Assets\Square150x150Logo.png"><Link>Assets\Square150x150Logo.png</Link></Content>
+    <Content Include="..\CreateYourTile.Uwp\Assets\Square310x310Logo.png"><Link>Assets\Square310x310Logo.png</Link></Content>
+    <Content Include="..\CreateYourTile.Uwp\Assets\Square44x44Logo.png"><Link>Assets\Square44x44Logo.png</Link></Content>
+    <Content Include="..\CreateYourTile.Uwp\Assets\StoreLogo.png"><Link>Assets\StoreLogo.png</Link></Content>
+    <Content Include="..\CreateYourTile.Uwp\Assets\Wide310x150Logo.png"><Link>Assets\Wide310x150Logo.png</Link></Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CreateYourTile.Launcher\CreateYourTile.Launcher.vcxproj">
+      <Project>{6C8E9A8D-9685-4659-B67D-34FC67D3B208}</Project>
+      <Name>CreateYourTile.Launcher</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\CreateYourTile.Uwp\CreateYourTile.Uwp.csproj">
+      <Project>{E1E6CA2C-1508-43B6-83FF-139F6D4889B3}</Project>
+      <Name>CreateYourTile.Uwp</Name>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.22621.3233" PrivateAssets="all" />
+  </ItemGroup>
+  <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.targets" />
+</Project>

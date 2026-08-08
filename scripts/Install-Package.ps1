@@ -64,5 +64,20 @@ if (-not (Test-Path -LiteralPath $machineTrustPath)) {
     Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
 }
 
-Add-AppxPackage -Path $packagePath -ForceApplicationShutdown
+$dependencyRoot = Join-Path $artifactRoot 'Dependencies\x64'
+$dependencyPaths = @()
+if (Test-Path -LiteralPath $dependencyRoot) {
+    $dependencyPaths = @(Get-ChildItem -LiteralPath $dependencyRoot -File -Filter '*.appx' |
+        Select-Object -ExpandProperty FullName)
+}
+
+$installParameters = @{
+    Path = $packagePath
+    ForceApplicationShutdown = $true
+    ForceUpdateFromAnyVersion = $true
+}
+if ($dependencyPaths.Count -gt 0) {
+    $installParameters.DependencyPath = $dependencyPaths
+}
+Add-AppxPackage @installParameters
 Write-Host 'Installation complete. Open CreateYourTile! from the Start menu.'

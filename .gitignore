@@ -4,6 +4,9 @@
 [Dd]ebug/
 [Rr]elease/
 artifacts/
+AppPackages/
+BundleArtifacts/
+Generated Files/
 publish/
 TestResults/
 *.msix
@@ -56,4 +59,3 @@ codex-*
 AGENTS.md
 MEMORY.md
 SESSION.md
-
