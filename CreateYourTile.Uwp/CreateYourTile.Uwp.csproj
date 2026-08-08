@@ -67,7 +67,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" />
-    <SDKReference Include="WindowsDesktop, Version=10.0.22621.0">
+    <SDKReference Include="WindowsDesktop, Version=$(TargetPlatformVersion)">
       <Name>Windows Desktop Extensions for the UWP</Name>
     </SDKReference>
   </ItemGroup>

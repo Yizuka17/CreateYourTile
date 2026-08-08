@@ -64,11 +64,30 @@ if (-not $msBuild) {
 $packageProject = Join-Path $projectRoot 'CreateYourTile.Package\CreateYourTile.Package.wapproj'
 $appxPackageDirectory = $buildRoot.TrimEnd('\') + '\'
 
+$kitsRoot = (Get-ItemProperty `
+    -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots' `
+    -Name KitsRoot10).KitsRoot10
+$targetSdkVersion = Get-ChildItem -LiteralPath (Join-Path $kitsRoot 'Lib') -Directory |
+    Where-Object {
+        $_.Name -match '^\d+\.\d+\.\d+\.\d+$' -and
+        (Test-Path -LiteralPath (Join-Path $_.FullName 'um\x64\kernel32.lib')) -and
+        (Test-Path -LiteralPath (Join-Path $kitsRoot "Platforms\UAP\$($_.Name)\Platform.xml")) -and
+        (Test-Path -LiteralPath (Join-Path $kitsRoot "Extension SDKs\WindowsDesktop\$($_.Name)\SDKManifest.xml"))
+    } |
+    Sort-Object { [version]$_.Name } -Descending |
+    Select-Object -First 1 -ExpandProperty Name
+if (-not $targetSdkVersion) {
+    throw 'A complete Windows 10/11 SDK with UWP and Windows Desktop extensions was not found.'
+}
+Write-Host "Using Windows SDK $targetSdkVersion."
+
 $buildOutput = & $msBuild $packageProject `
     /restore `
     /t:Build `
     /p:Configuration=Release `
     /p:Platform=x64 `
+    "/p:TargetPlatformVersion=$targetSdkVersion" `
+    "/p:WindowsTargetPlatformVersion=$targetSdkVersion" `
     /p:AppxBundle=Never `
     /p:AppxPackageSigningEnabled=false `
     "/p:AppxPackageDir=$appxPackageDirectory" `
