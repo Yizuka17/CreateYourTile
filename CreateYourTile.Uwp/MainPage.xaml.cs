@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Windows.ApplicationModel;
 using Windows.Foundation;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
@@ -16,6 +15,7 @@ using Windows.UI.StartScreen;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
+using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
@@ -34,6 +34,8 @@ namespace CreateYourTile.Uwp
         private bool? _isCompactLayout;
         private bool _ready;
         private IReadOnlyList<InstalledAppInfo> _installedApps;
+        private string _selectedInstalledAppTarget;
+        private string _selectedInstalledAppTargetKind;
 
         public MainPage()
         {
@@ -145,11 +147,8 @@ namespace CreateYourTile.Uwp
         {
             try
             {
-                SetStatus("正在读取已安装的 Microsoft Store 应用…", false);
-                if (_installedApps == null)
-                {
-                    _installedApps = await InstalledAppCatalog.GetAppsAsync();
-                }
+                SetStatus("正在读取已安装应用…", false);
+                _installedApps = await InstalledAppCatalog.GetAppsAsync();
 
                 AutoSuggestBox searchBox = new AutoSuggestBox
                 {
@@ -162,17 +161,41 @@ namespace CreateYourTile.Uwp
                     Height = 420,
                     SelectionMode = ListViewSelectionMode.Single,
                     IsItemClickEnabled = true,
-                    ItemTemplate = (DataTemplate)Resources["InstalledAppTemplate"],
-                    ItemsSource = _installedApps
+                    ItemTemplate = (DataTemplate)Resources["InstalledAppTemplate"]
                 };
+                listView.GroupStyle.Add(new GroupStyle
+                {
+                    HeaderTemplate = (DataTemplate)Resources["InstalledAppGroupHeaderTemplate"],
+                    HidesIfEmpty = true
+                });
+                TextBlock countText = new TextBlock
+                {
+                    Margin = new Thickness(0, 0, 0, 8),
+                    Foreground = (Brush)Application.Current.Resources[
+                        "SystemControlForegroundBaseMediumBrush"]
+                };
+                Action<IEnumerable<InstalledAppInfo>> updateList = apps =>
+                {
+                    List<InstalledAppInfo> filtered = apps.ToList();
+                    CollectionViewSource source = new CollectionViewSource
+                    {
+                        IsSourceGrouped = true,
+                        Source = InstalledAppCatalog.GroupApps(filtered),
+                        ItemsPath = new PropertyPath("Items")
+                    };
+                    listView.ItemsSource = source.View;
+                    countText.Text = filtered.Count + " 个已安装应用，按首字母分组";
+                };
+                updateList(_installedApps);
                 searchBox.TextChanged += delegate
                 {
                     string query = searchBox.Text == null ? string.Empty : searchBox.Text.Trim();
-                    listView.ItemsSource = string.IsNullOrWhiteSpace(query)
+                    IEnumerable<InstalledAppInfo> filtered = string.IsNullOrWhiteSpace(query)
                         ? _installedApps
                         : _installedApps.Where(app =>
                             app.Name.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
-                            app.Target.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                            app.Target.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0);
+                    updateList(filtered);
                 };
                 listView.ItemClick += delegate(object itemSender, ItemClickEventArgs itemArgs)
                 {
@@ -181,6 +204,7 @@ namespace CreateYourTile.Uwp
 
                 StackPanel content = new StackPanel();
                 content.Children.Add(searchBox);
+                content.Children.Add(countText);
                 content.Children.Add(listView);
                 ContentDialog dialog = new ContentDialog
                 {
@@ -199,22 +223,32 @@ namespace CreateYourTile.Uwp
                     return;
                 }
 
+                _selectedInstalledAppTarget = selected.Target;
+                _selectedInstalledAppTargetKind = selected.TargetKind;
                 SelectComboBoxTag(TargetKindComboBox, "AppId");
                 TargetTextBox.Text = selected.Target;
                 ArgumentsTextBox.Text = string.Empty;
                 NameTextBox.Text = selected.Name;
 
-                if (selected.LogoReference != null)
+                string iconError = null;
+                if (!string.IsNullOrWhiteSpace(selected.IconFileName))
                 {
-                    using (IRandomAccessStreamWithContentType logoStream = await selected.LogoReference.OpenReadAsync())
+                    try
                     {
-                        StorageFile logoFile = await TileImageService.CopyStreamToTemporaryFileAsync(
-                            logoStream,
-                            "selected-app-logo.img");
+                        StorageFolder iconFolder = await ApplicationData.Current.LocalFolder.GetFolderAsync(
+                            "AppCatalog");
+                        StorageFile logoFile = await iconFolder.GetFileAsync(selected.IconFileName);
                         await ApplySourceImageAsync(logoFile, selected.Name + " 的应用图标");
                     }
+                    catch (Exception exception)
+                    {
+                        iconError = exception.Message;
+                    }
                 }
-                SetStatus("已选择应用：" + selected.Name + "。", false);
+                SetStatus(iconError == null
+                    ? "已选择应用：" + selected.Name + "。"
+                    : "已选择应用，但无法读取其图标：" + iconError,
+                    iconError != null);
             }
             catch (Exception exception)
             {
@@ -295,7 +329,14 @@ namespace CreateYourTile.Uwp
             {
                 string name = NameTextBox.Text.Trim();
                 string targetKind = GetSelectedTag(TargetKindComboBox);
-                string target = NormalizeTarget(TargetTextBox.Text.Trim(), targetKind);
+                string rawTarget = TargetTextBox.Text.Trim();
+                if (targetKind == "AppId" &&
+                    !string.IsNullOrWhiteSpace(_selectedInstalledAppTargetKind) &&
+                    string.Equals(rawTarget, _selectedInstalledAppTarget, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetKind = _selectedInstalledAppTargetKind;
+                }
+                string target = NormalizeTarget(rawTarget, targetKind);
                 string id = CreateStableId(name, target);
                 StorageFolder tilesFolder = await ApplicationData.Current.LocalFolder.CreateFolderAsync(
                     "Tiles",

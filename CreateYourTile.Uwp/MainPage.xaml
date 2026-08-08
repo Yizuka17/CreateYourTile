@@ -30,6 +30,12 @@
                 </StackPanel>
             </Grid>
         </DataTemplate>
+
+        <DataTemplate x:Key="InstalledAppGroupHeaderTemplate">
+            <TextBlock Text="{Binding Key}" FontSize="22" FontWeight="SemiBold"
+                       Margin="8,14,0,4"
+                       Foreground="{ThemeResource SystemControlHighlightAccentBrush}" />
+        </DataTemplate>
     </Page.Resources>
 
     <Grid Padding="28,24,28,18">
