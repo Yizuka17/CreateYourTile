@@ -563,6 +563,10 @@ namespace CreateYourTile.Uwp
             PreviewFrame.Height = frameHeight;
             PreviewCanvas.Width = frameWidth;
             PreviewCanvas.Height = frameHeight;
+            PreviewFrame.Clip = new RectangleGeometry
+            {
+                Rect = new Rect(0, 0, frameWidth, frameHeight)
+            };
 
             if (_sourceBitmap == null || _sourcePixelWidth <= 0 || _sourcePixelHeight <= 0)
             {
