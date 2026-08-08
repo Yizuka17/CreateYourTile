@@ -576,10 +576,18 @@ namespace CreateYourTile.Uwp
             double scale = Math.Max(frameWidth / _sourcePixelWidth, frameHeight / _sourcePixelHeight) * ZoomSlider.Value;
             double imageWidth = _sourcePixelWidth * scale;
             double imageHeight = _sourcePixelHeight * scale;
-            double overflowX = Math.Max(0, imageWidth - frameWidth);
-            double overflowY = Math.Max(0, imageHeight - frameHeight);
-            double left = (frameWidth - imageWidth) / 2 - OffsetXSlider.Value * overflowX / 2;
-            double top = (frameHeight - imageHeight) / 2 - OffsetYSlider.Value * overflowY / 2;
+            // The sliders pan through cropped overflow when the image is larger,
+            // and through the available transparent space when it is smaller.
+            // Using only positive overflow made both sliders ineffective while
+            // zoomed out.
+            double left = ImagePositioning.CalculateStart(
+                frameWidth,
+                imageWidth,
+                OffsetXSlider.Value);
+            double top = ImagePositioning.CalculateStart(
+                frameHeight,
+                imageHeight,
+                OffsetYSlider.Value);
 
             PreviewImage.Width = imageWidth;
             PreviewImage.Height = imageHeight;

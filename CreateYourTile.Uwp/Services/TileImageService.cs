@@ -126,12 +126,14 @@ namespace CreateYourTile.Uwp.Services
                 outputHeight / (double)decoder.PixelHeight) * zoom;
             uint scaledWidth = ToScaledDimension(decoder.PixelWidth * scale);
             uint scaledHeight = ToScaledDimension(decoder.PixelHeight * scale);
-            long imageLeft = (long)Math.Round(
-                (outputWidth - (double)scaledWidth) / 2 -
-                offsetX * Math.Max(0, scaledWidth - (double)outputWidth) / 2);
-            long imageTop = (long)Math.Round(
-                (outputHeight - (double)scaledHeight) / 2 -
-                offsetY * Math.Max(0, scaledHeight - (double)outputHeight) / 2);
+            long imageLeft = (long)Math.Round(ImagePositioning.CalculateStart(
+                outputWidth,
+                scaledWidth,
+                offsetX));
+            long imageTop = (long)Math.Round(ImagePositioning.CalculateStart(
+                outputHeight,
+                scaledHeight,
+                offsetY));
 
             uint destinationX = (uint)Math.Max(0, imageLeft);
             uint destinationY = (uint)Math.Max(0, imageTop);
