@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <appmodel.h>
 #include <shlobj.h>
+#include <shobjidl_core.h>
 #include <shellapi.h>
 #include <wincrypt.h>
 #include <fstream>
@@ -131,18 +132,33 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
         return 3;
     }
 
-    HINSTANCE result;
     if (kind == L"AppId")
     {
-        std::wstring appPath = L"shell:AppsFolder\\" + target;
-        result = ShellExecuteW(nullptr, L"open", L"explorer.exe", appPath.c_str(), nullptr, SW_SHOWNORMAL);
-    }
-    else
-    {
-        const wchar_t* parameters = arguments.empty() ? nullptr : arguments.c_str();
-        result = ShellExecuteW(nullptr, L"open", target.c_str(), parameters, nullptr, SW_SHOWNORMAL);
+        IApplicationActivationManager* activationManager = nullptr;
+        HRESULT createResult = CoCreateInstance(
+            CLSID_ApplicationActivationManager,
+            nullptr,
+            CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&activationManager));
+        if (FAILED(createResult))
+        {
+            CoUninitialize();
+            return 4;
+        }
+
+        DWORD processId = 0;
+        HRESULT activationResult = activationManager->ActivateApplication(
+            target.c_str(),
+            arguments.c_str(),
+            AO_NONE,
+            &processId);
+        activationManager->Release();
+        CoUninitialize();
+        return SUCCEEDED(activationResult) ? 0 : 4;
     }
 
+    const wchar_t* parameters = arguments.empty() ? nullptr : arguments.c_str();
+    HINSTANCE result = ShellExecuteW(nullptr, L"open", target.c_str(), parameters, nullptr, SW_SHOWNORMAL);
     CoUninitialize();
     return reinterpret_cast<INT_PTR>(result) > 32 ? 0 : 4;
 }

@@ -334,7 +334,7 @@ namespace CreateYourTile.Uwp
                 {
                     RegisterButton.Content = "等待系统确认…";
                     success = await tile.RequestCreateAsync();
-                    SetStatus(success ? "磁贴已固定。" : "已取消固定。", !success);
+                    SetStatus(success ? "磁贴已固定。" : "已取消固定。", false);
                 }
             }
             catch (Exception exception)
@@ -375,14 +375,13 @@ namespace CreateYourTile.Uwp
 
         private static SecondaryTile BuildTile(TileDefinition definition)
         {
-            TileSize tileSize;
-            switch (definition.PreferredSize)
-            {
-                case "Small": tileSize = TileSize.Square71x71; break;
-                case "Wide": tileSize = TileSize.Wide310x150; break;
-                case "Large": tileSize = TileSize.Square310x310; break;
-                default: tileSize = TileSize.Square150x150; break;
-            }
+            // Windows 10 only accepts medium, wide, or Default as the desired
+            // size passed to the SecondaryTile constructor. Small and large
+            // remain available after pinning because their logo assets are set
+            // below, but passing either size here raises E_INVALIDARG.
+            TileSize tileSize = definition.PreferredSize == "Wide"
+                ? TileSize.Wide310x150
+                : TileSize.Square150x150;
 
             string baseUri = "ms-appdata:///local/Tiles/" + definition.Id;
             SecondaryTile tile = new SecondaryTile(
@@ -392,6 +391,7 @@ namespace CreateYourTile.Uwp
                 new Uri(baseUri + "/Square.png"),
                 tileSize);
             tile.VisualElements.Square44x44Logo = new Uri(baseUri + "/Small.png");
+            tile.VisualElements.Square70x70Logo = new Uri(baseUri + "/Small.png");
             tile.VisualElements.Wide310x150Logo = new Uri(baseUri + "/Wide.png");
             tile.VisualElements.Square310x310Logo = new Uri(baseUri + "/Square.png");
             tile.VisualElements.ShowNameOnSquare150x150Logo = definition.ShowName;

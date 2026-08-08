@@ -5,6 +5,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("在 Windows 10 创建并固定 Live Tile")]
 [assembly: AssemblyCompany("CreateYourTile")]
 [assembly: AssemblyProduct("CreateYourTile!")]
-[assembly: AssemblyVersion("1.5.0.3")]
-[assembly: AssemblyFileVersion("1.5.0.3")]
+[assembly: AssemblyVersion("1.5.0.5")]
+[assembly: AssemblyFileVersion("1.5.0.5")]
 [assembly: ComVisible(false)]

@@ -210,15 +210,17 @@
                         <TextBox x:Name="ArgumentsTextBox" Header="启动参数（可选）" Margin="0,14,0,0"
                                  Style="{StaticResource TouchTextBoxStyle}" />
 
-                        <ComboBox x:Name="TileSizeComboBox" Header="默认磁贴尺寸" Margin="0,14,0,0"
-                                  HorizontalAlignment="Stretch" SelectedIndex="1"
+                        <ComboBox x:Name="TileSizeComboBox" Header="固定时磁贴尺寸" Margin="0,14,0,0"
+                                  HorizontalAlignment="Stretch" SelectedIndex="0"
                                   Style="{StaticResource TouchComboBoxStyle}"
                                   SelectionChanged="TileSizeComboBox_SelectionChanged">
-                            <ComboBoxItem Content="小 (71 × 71)" Tag="Small" />
                             <ComboBoxItem Content="中 (150 × 150)" Tag="Medium" />
                             <ComboBoxItem Content="宽 (310 × 150)" Tag="Wide" />
-                            <ComboBoxItem Content="大 (310 × 310)" Tag="Large" />
                         </ComboBox>
+
+                        <TextBlock Text="Windows 10 固定接口仅支持中或宽作为初始尺寸；固定后仍可在“开始”菜单调整为小或大。"
+                                   Margin="0,7,0,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
 
                         <CheckBox x:Name="ShowNameCheckBox" Content="在磁贴上显示名称"
                                   IsChecked="True" MinHeight="40" Margin="0,14,0,0"
