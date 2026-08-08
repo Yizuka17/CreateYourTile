@@ -1,4 +1,4 @@
-name: Publish prerelease
+name: Publish release
 
 on:
   push:
@@ -39,7 +39,7 @@ jobs:
           Copy-Item '.\artifacts\msix\Dependencies' (Join-Path $bundleRoot 'Dependencies') -Recurse
 
           @'
-          CreateYourTile! UWP prerelease
+          CreateYourTile! UWP release
 
           系统要求：Windows 10 1809 或更高版本，x64。
 
@@ -49,7 +49,7 @@ jobs:
              powershell -ExecutionPolicy Bypass -File .\Install-Package.ps1
           3. 接受 UAC 管理员权限提示。脚本会导入自签名开发证书，并安装 UWP 运行依赖与 MSIX。
 
-          注意：这是使用自签名开发证书发布的预览版本，仅应安装来自本项目 GitHub Release 的原始文件。
+          注意：这是使用自签名开发证书发布的版本，仅应安装来自本项目 GitHub Release 的原始文件。
           '@ | Set-Content (Join-Path $bundleRoot 'README.txt') -Encoding utf8
 
           Compress-Archive -Path (Join-Path $bundleRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal -Force
@@ -69,7 +69,7 @@ jobs:
           }
           $hashes | Set-Content (Join-Path $releaseRoot 'SHA256SUMS.txt') -Encoding ascii
 
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,19 +77,25 @@ jobs:
           gh release view '${{ github.ref_name }}' --repo '${{ github.repository }}' *> $null
           $releaseExists = $LASTEXITCODE -eq 0
 
+          $notesPath = ".\.github\release-notes-${{ github.ref_name }}.md"
+          if (-not (Test-Path -LiteralPath $notesPath)) {
+            throw "Release notes not found: $notesPath"
+          }
+
           if ($releaseExists) {
             gh release edit '${{ github.ref_name }}' `
               --repo '${{ github.repository }}' `
-              --title 'CreateYourTile! ${{ github.ref_name }} UWP 预览版' `
-              --notes-file '.\.github\release-notes-v1.5.0.md' `
-              --prerelease
+              --title 'CreateYourTile! ${{ github.ref_name }}' `
+              --notes-file $notesPath `
+              --prerelease=false `
+              --latest
           }
           else {
             gh release create '${{ github.ref_name }}' `
               --repo '${{ github.repository }}' `
-              --title 'CreateYourTile! ${{ github.ref_name }} UWP 预览版' `
-              --notes-file '.\.github\release-notes-v1.5.0.md' `
-              --prerelease `
+              --title 'CreateYourTile! ${{ github.ref_name }}' `
+              --notes-file $notesPath `
+              --latest `
               --verify-tag
           }
 

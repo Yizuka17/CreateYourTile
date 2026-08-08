@@ -170,14 +170,10 @@ namespace CreateYourTile.Uwp.Services
                 throw new InvalidOperationException("缩小图片后的像素缓冲区尺寸不正确。");
             }
 
+            // A new BGRA buffer is fully transparent. Keep the area outside the
+            // scaled image transparent so Windows can composite it with the
+            // tile's BackgroundColor instead of baking in an opaque dark box.
             byte[] outputPixels = new byte[checked((int)(outputWidth * outputHeight * 4))];
-            for (int index = 0; index < outputPixels.Length; index += 4)
-            {
-                outputPixels[index] = 17;
-                outputPixels[index + 1] = 17;
-                outputPixels[index + 2] = 17;
-                outputPixels[index + 3] = 255;
-            }
             int sourceStride = checked((int)(copyWidth * 4));
             for (uint row = 0; row < copyHeight; row++)
             {
