@@ -25,85 +25,13 @@ namespace CreateYourTile.Uwp.Services
             using (IRandomAccessStream input = await sourceFile.OpenAsync(FileAccessMode.Read))
             {
                 BitmapDecoder decoder = await BitmapDecoder.CreateAsync(input);
-                double sourceWidth = decoder.PixelWidth;
-                double sourceHeight = decoder.PixelHeight;
-                if (zoom < 1)
-                {
-                    byte[] zoomedOutPixels = await RenderZoomedOutPixelsAsync(
-                        decoder,
-                        outputWidth,
-                        outputHeight,
-                        zoom,
-                        offsetX,
-                        offsetY);
-                    return await EncodePngAsync(
-                        outputFolder,
-                        outputName,
-                        outputWidth,
-                        outputHeight,
-                        zoomedOutPixels);
-                }
-
-                double outputAspect = (double)outputWidth / outputHeight;
-                double sourceAspect = sourceWidth / sourceHeight;
-
-                double baseCropWidth;
-                double baseCropHeight;
-                if (sourceAspect > outputAspect)
-                {
-                    baseCropHeight = sourceHeight;
-                    baseCropWidth = sourceHeight * outputAspect;
-                }
-                else
-                {
-                    baseCropWidth = sourceWidth;
-                    baseCropHeight = sourceWidth / outputAspect;
-                }
-
-                double cropWidth = Math.Max(1, baseCropWidth / zoom);
-                double cropHeight = Math.Max(1, baseCropHeight / zoom);
-                double maxLeft = Math.Max(0, sourceWidth - cropWidth);
-                double maxTop = Math.Max(0, sourceHeight - cropHeight);
-                double left = maxLeft * (offsetX + 1) / 2;
-                double top = maxTop * (offsetY + 1) / 2;
-
-                // BitmapTransform applies scaling before Bounds. Bounds therefore
-                // uses coordinates in the scaled bitmap, not the source bitmap.
-                // Keeping source-space bounds here makes small Store icons return
-                // fewer pixels than BitmapEncoder.SetPixelData expects.
-                double scale = Math.Max(outputWidth / cropWidth, outputHeight / cropHeight);
-                uint scaledWidth = Math.Max(outputWidth, (uint)Math.Ceiling(sourceWidth * scale));
-                uint scaledHeight = Math.Max(outputHeight, (uint)Math.Ceiling(sourceHeight * scale));
-                uint boundsX = Math.Min((uint)Math.Round(left * scale), scaledWidth - outputWidth);
-                uint boundsY = Math.Min((uint)Math.Round(top * scale), scaledHeight - outputHeight);
-
-                BitmapTransform transform = new BitmapTransform
-                {
-                    Bounds = new BitmapBounds
-                    {
-                        X = boundsX,
-                        Y = boundsY,
-                        Width = outputWidth,
-                        Height = outputHeight
-                    },
-                    ScaledWidth = scaledWidth,
-                    ScaledHeight = scaledHeight,
-                    InterpolationMode = BitmapInterpolationMode.Fant
-                };
-
-                PixelDataProvider provider = await decoder.GetPixelDataAsync(
-                    BitmapPixelFormat.Bgra8,
-                    BitmapAlphaMode.Premultiplied,
-                    transform,
-                    ExifOrientationMode.RespectExifOrientation,
-                    ColorManagementMode.ColorManageToSRgb);
-
-                byte[] pixels = provider.DetachPixelData();
-                int expectedLength = checked((int)(outputWidth * outputHeight * 4));
-                if (pixels.Length != expectedLength)
-                {
-                    throw new InvalidOperationException("图片解码后的像素缓冲区尺寸不正确。");
-                }
+                byte[] pixels = await RenderPositionedPixelsAsync(
+                    decoder,
+                    outputWidth,
+                    outputHeight,
+                    zoom,
+                    offsetX,
+                    offsetY);
                 return await EncodePngAsync(
                     outputFolder,
                     outputName,
@@ -113,7 +41,7 @@ namespace CreateYourTile.Uwp.Services
             }
         }
 
-        private static async Task<byte[]> RenderZoomedOutPixelsAsync(
+        private static async Task<byte[]> RenderPositionedPixelsAsync(
             BitmapDecoder decoder,
             uint outputWidth,
             uint outputHeight,
@@ -169,7 +97,7 @@ namespace CreateYourTile.Uwp.Services
             int expectedSourceLength = checked((int)(copyWidth * copyHeight * 4));
             if (sourcePixels.Length != expectedSourceLength)
             {
-                throw new InvalidOperationException("缩小图片后的像素缓冲区尺寸不正确。");
+                throw new InvalidOperationException("定位图片后的像素缓冲区尺寸不正确。");
             }
 
             // A new BGRA buffer is fully transparent. Keep the area outside the
