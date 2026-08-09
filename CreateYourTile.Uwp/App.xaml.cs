@@ -24,6 +24,7 @@ namespace CreateYourTile.Uwp
                 string tileId = e.Arguments.Substring("tile:".Length);
                 if (await TileLaunchService.TryLaunchAsync(tileId))
                 {
+                    Current.Exit();
                     return;
                 }
             }

@@ -14,6 +14,7 @@ TestResults/
 *.appx
 *.appxbundle
 *.appxsym
+*.obj
 *.cer
 *.pfx
 *.p12

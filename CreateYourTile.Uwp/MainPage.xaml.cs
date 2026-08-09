@@ -10,7 +10,6 @@ using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
-using Windows.UI;
 using Windows.UI.StartScreen;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -389,18 +388,30 @@ namespace CreateYourTile.Uwp
                 };
                 TileStorage.Save(definition);
 
-                SecondaryTile tile = BuildTile(definition);
-                bool success;
                 if (SecondaryTile.Exists(id))
                 {
-                    success = await tile.UpdateAsync();
-                    SetStatus(success ? "磁贴图片、名称和启动目标已更新。" : "Windows 拒绝更新该磁贴。", !success);
+                    RegisterButton.Content = "等待移除旧版磁贴确认…";
+                    bool removed = await new SecondaryTile(id).RequestDeleteAsync();
+                    if (!removed)
+                    {
+                        SetStatus("需要先移除旧版磁贴，才能切换为无窗口直接启动。", false);
+                        return;
+                    }
+                }
+
+                RegisterButton.Content = "等待系统确认…";
+                DesktopTilePinOutcome outcome = await DesktopTileService.PinAsync(definition);
+                if (outcome == DesktopTilePinOutcome.Updated)
+                {
+                    SetStatus("磁贴图片、名称和启动目标已更新。", false);
+                }
+                else if (outcome == DesktopTilePinOutcome.Created)
+                {
+                    SetStatus("磁贴已固定；点击时将由无窗口启动器直接打开目标。", false);
                 }
                 else
                 {
-                    RegisterButton.Content = "等待系统确认…";
-                    success = await tile.RequestCreateAsync();
-                    SetStatus(success ? "磁贴已固定。" : "已取消固定。", false);
+                    SetStatus("已取消固定。", false);
                 }
             }
             catch (Exception exception)
@@ -437,35 +448,6 @@ namespace CreateYourTile.Uwp
                 }
             }
             return string.Empty;
-        }
-
-        private static SecondaryTile BuildTile(TileDefinition definition)
-        {
-            // Windows 10 only accepts medium, wide, or Default as the desired
-            // size passed to the SecondaryTile constructor. Small and large
-            // remain available after pinning because their logo assets are set
-            // below, but passing either size here raises E_INVALIDARG.
-            TileSize tileSize = definition.PreferredSize == "Wide"
-                ? TileSize.Wide310x150
-                : TileSize.Square150x150;
-
-            string baseUri = "ms-appdata:///local/Tiles/" + definition.Id;
-            SecondaryTile tile = new SecondaryTile(
-                definition.Id,
-                definition.Name,
-                "tile:" + definition.Id,
-                new Uri(baseUri + "/Square.png"),
-                tileSize);
-            tile.VisualElements.Square44x44Logo = new Uri(baseUri + "/Small.png");
-            tile.VisualElements.Square70x70Logo = new Uri(baseUri + "/Small.png");
-            tile.VisualElements.Wide310x150Logo = new Uri(baseUri + "/Wide.png");
-            tile.VisualElements.Square310x310Logo = new Uri(baseUri + "/Square.png");
-            tile.VisualElements.ShowNameOnSquare150x150Logo = definition.ShowName;
-            tile.VisualElements.ShowNameOnWide310x150Logo = definition.ShowName;
-            tile.VisualElements.ShowNameOnSquare310x310Logo = definition.ShowName;
-            tile.VisualElements.ForegroundText = ForegroundText.Light;
-            tile.VisualElements.BackgroundColor = Color.FromArgb(255, 20, 24, 30);
-            return tile;
         }
 
         private static string CreateStableId(string name, string target)

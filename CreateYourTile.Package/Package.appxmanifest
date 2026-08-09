@@ -7,7 +7,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="mp uap desktop rescap">
 
-  <Identity Name="CreateYourTile.Local" Publisher="CN=CreateYourTile.Dev" Version="1.6.1.2" ProcessorArchitecture="x64" />
+  <Identity Name="CreateYourTile.Local" Publisher="CN=CreateYourTile.Dev" Version="1.6.1.6" ProcessorArchitecture="x64" />
   <mp:PhoneIdentity PhoneProductId="28558ffa-ba40-4b9c-a546-2fa34d29f5f2"
                     PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
@@ -43,6 +43,17 @@
         <desktop:Extension Category="windows.fullTrustProcess"
                            Executable="CreateYourTile.Launcher\CreateYourTile.Launcher.exe" />
       </Extensions>
+    </Application>
+    <Application Id="TileLauncher"
+                 Executable="CreateYourTile.Launcher\CreateYourTile.Launcher.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        AppListEntry="none"
+        DisplayName="CreateYourTile! Tile Launcher"
+        Description="无窗口磁贴启动器"
+        BackgroundColor="transparent"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        Square150x150Logo="Assets\Square150x150Logo.png" />
     </Application>
   </Applications>
 

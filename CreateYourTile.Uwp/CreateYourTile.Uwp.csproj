@@ -48,6 +48,7 @@
     <Compile Include="Models\TileDefinition.cs" />
     <Compile Include="Services\InstalledAppCatalog.cs" />
     <Compile Include="Services\ImagePositioning.cs" />
+    <Compile Include="Services\DesktopTileService.cs" />
     <Compile Include="Services\TargetFilePicker.cs" />
     <Compile Include="Services\TileImageService.cs" />
     <Compile Include="Services\TileLaunchService.cs" />

@@ -1,10 +1,15 @@
 #include <windows.h>
 #include <appmodel.h>
+#include <roapi.h>
 #include <shlobj.h>
 #include <shobjidl_core.h>
 #include <shellapi.h>
 #include <wincrypt.h>
 #include <wincodec.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.UI.h>
+#include <winrt/Windows.UI.StartScreen.h>
+#include <winrt/base.h>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -141,6 +146,67 @@ namespace
     {
         size_t separator = path.find_last_of(L"\\/");
         return separator == std::wstring::npos ? std::wstring() : path.substr(0, separator);
+    }
+
+    std::wstring GetPackageFamilyNameValue()
+    {
+        UINT32 familyLength = 0;
+        if (GetCurrentPackageFamilyName(&familyLength, nullptr) != ERROR_INSUFFICIENT_BUFFER)
+        {
+            return std::wstring();
+        }
+        std::vector<wchar_t> family(familyLength);
+        if (GetCurrentPackageFamilyName(&familyLength, family.data()) != ERROR_SUCCESS)
+        {
+            return std::wstring();
+        }
+        return std::wstring(family.data());
+    }
+
+    std::wstring GetTileLauncherAumid()
+    {
+        std::wstring family = GetPackageFamilyNameValue();
+        return family.empty() ? std::wstring() : family + L"!TileLauncher";
+    }
+
+    bool IsSafeTileId(const std::wstring& value)
+    {
+        const std::wstring prefix = L"localtile-";
+        if (value.size() != prefix.size() + 24 || value.compare(0, prefix.size(), prefix) != 0)
+        {
+            return false;
+        }
+        for (size_t index = prefix.size(); index < value.size(); index++)
+        {
+            wchar_t character = value[index];
+            if (!((character >= L'a' && character <= L'f') ||
+                  (character >= L'0' && character <= L'9')))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool IsSafePinFileName(const std::wstring& value, const std::wstring& prefix)
+    {
+        const std::wstring suffix = L".txt";
+        if (value.size() != prefix.size() + 32 + suffix.size() ||
+            value.compare(0, prefix.size(), prefix) != 0 ||
+            value.compare(value.size() - suffix.size(), suffix.size(), suffix) != 0)
+        {
+            return false;
+        }
+        for (size_t index = prefix.size(); index < value.size() - suffix.size(); index++)
+        {
+            wchar_t character = value[index];
+            if (!((character >= L'a' && character <= L'f') ||
+                  (character >= L'0' && character <= L'9')))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     bool IsSafeCatalogFileName(const std::wstring& fileName)
@@ -654,17 +720,406 @@ namespace
             ? ShortcutLaunchResult::Succeeded
             : ShortcutLaunchResult::Failed;
     }
+
+    bool LaunchTarget(
+        const std::wstring& kind,
+        const std::wstring& target,
+        const std::wstring& arguments)
+    {
+        if (target.empty())
+        {
+            return false;
+        }
+
+        ShortcutLaunchResult shortcutResult = LaunchElevatedShortcutIfRequested(target, arguments);
+        if (shortcutResult != ShortcutLaunchResult::NotElevatedShortcut)
+        {
+            return shortcutResult == ShortcutLaunchResult::Succeeded;
+        }
+
+        if (kind == L"AppId")
+        {
+            return SUCCEEDED(ActivateApplication(target, arguments));
+        }
+
+        if (kind == L"ShellApp")
+        {
+            if (IsDirectShellTarget(target))
+            {
+                const wchar_t* parameters = arguments.empty() ? nullptr : arguments.c_str();
+                HINSTANCE directResult = ShellExecuteW(
+                    nullptr, L"open", target.c_str(), parameters, nullptr, SW_SHOWNORMAL);
+                return reinterpret_cast<INT_PTR>(directResult) > 32;
+            }
+
+            if (SUCCEEDED(ActivateApplication(target, arguments)))
+            {
+                return true;
+            }
+
+            std::wstring appPath = L"shell:AppsFolder\\" + target;
+            HINSTANCE shellResult = ShellExecuteW(
+                nullptr, L"open", L"explorer.exe", appPath.c_str(), nullptr, SW_SHOWNORMAL);
+            return reinterpret_cast<INT_PTR>(shellResult) > 32;
+        }
+
+        const wchar_t* parameters = arguments.empty() ? nullptr : arguments.c_str();
+        HINSTANCE result = ShellExecuteW(
+            nullptr, L"open", target.c_str(), parameters, nullptr, SW_SHOWNORMAL);
+        return reinterpret_cast<INT_PTR>(result) > 32;
+    }
+
+    bool ReadTileDefinition(
+        const std::wstring& localStateDirectory,
+        const std::wstring& tileId,
+        std::wstring& kind,
+        std::wstring& target,
+        std::wstring& arguments)
+    {
+        if (!IsSafeTileId(tileId))
+        {
+            return false;
+        }
+        std::wstring path = localStateDirectory + L"\\TileDefinitions\\" + tileId + L".txt";
+        std::ifstream input(path, std::ios::binary);
+        std::string kindLine;
+        std::string targetLine;
+        std::string argumentsLine;
+        if (!ReadLine(input, kindLine) || !ReadLine(input, targetLine))
+        {
+            return false;
+        }
+        if (kindLine.size() >= 3 &&
+            static_cast<unsigned char>(kindLine[0]) == 0xEF &&
+            static_cast<unsigned char>(kindLine[1]) == 0xBB &&
+            static_cast<unsigned char>(kindLine[2]) == 0xBF)
+        {
+            kindLine.erase(0, 3);
+        }
+        if (!ReadLine(input, argumentsLine))
+        {
+            argumentsLine.clear();
+        }
+        kind = Utf8ToWide(kindLine);
+        target = DecodeBase64(targetLine);
+        arguments = DecodeBase64(argumentsLine);
+        return !kind.empty() && !target.empty();
+    }
+
+    bool ParseTileActivationArguments(
+        const std::wstring& activationArguments,
+        std::wstring& tileId)
+    {
+        const std::wstring prefix = L"tile:";
+        if (activationArguments.compare(0, prefix.size(), prefix) != 0)
+        {
+            return false;
+        }
+
+        // Windows 10 appends "/tileid <id>" when a desktop-owned SecondaryTile
+        // is launched from Start. Only the first token belongs to the app.
+        size_t end = activationArguments.find_first_of(L" \t", prefix.size());
+        tileId = activationArguments.substr(
+            prefix.size(),
+            end == std::wstring::npos ? std::wstring::npos : end - prefix.size());
+        return IsSafeTileId(tileId);
+    }
+
+    bool WritePinResult(
+        const std::wstring& localStateDirectory,
+        const std::wstring& resultFileName,
+        const std::string& result)
+    {
+        if (!IsSafePinFileName(resultFileName, L"tile-pin-result-"))
+        {
+            return false;
+        }
+        std::wstring outputPath = localStateDirectory + L"\\" + resultFileName;
+        std::wstring temporaryPath = outputPath + L".tmp";
+        std::ofstream output(temporaryPath, std::ios::binary | std::ios::trunc);
+        if (!output)
+        {
+            return false;
+        }
+        output << result << '\n';
+        output.flush();
+        bool success = output.good();
+        output.close();
+        if (!success || !MoveFileExW(
+            temporaryPath.c_str(),
+            outputPath.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            DeleteFileW(temporaryPath.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    struct PinTileRequest
+    {
+        std::wstring Id;
+        std::wstring Name;
+        bool Wide = false;
+        bool ShowName = false;
+    };
+
+    bool ReadPinTileRequest(
+        const std::wstring& localStateDirectory,
+        const std::wstring& requestFileName,
+        PinTileRequest& request)
+    {
+        if (!IsSafePinFileName(requestFileName, L"tile-pin-"))
+        {
+            return false;
+        }
+        std::wstring requestPath = localStateDirectory + L"\\" + requestFileName;
+        std::ifstream input(requestPath, std::ios::binary);
+        std::string idLine;
+        std::string nameLine;
+        std::string sizeLine;
+        std::string showNameLine;
+        if (!ReadLine(input, idLine) ||
+            !ReadLine(input, nameLine) ||
+            !ReadLine(input, sizeLine) ||
+            !ReadLine(input, showNameLine))
+        {
+            return false;
+        }
+        input.close();
+        DeleteFileW(requestPath.c_str());
+        if (idLine.size() >= 3 &&
+            static_cast<unsigned char>(idLine[0]) == 0xEF &&
+            static_cast<unsigned char>(idLine[1]) == 0xBB &&
+            static_cast<unsigned char>(idLine[2]) == 0xBF)
+        {
+            idLine.erase(0, 3);
+        }
+        request.Id = DecodeBase64(idLine);
+        request.Name = DecodeBase64(nameLine);
+        request.Wide = sizeLine == "Wide";
+        request.ShowName = showNameLine == "1";
+        return IsSafeTileId(request.Id) && !request.Name.empty();
+    }
+
+    bool ParsePinActivationArguments(
+        const std::wstring& arguments,
+        std::wstring& requestFileName,
+        std::wstring& resultFileName,
+        HWND& ownerWindow)
+    {
+        const std::wstring prefix = L"pin:";
+        if (arguments.compare(0, prefix.size(), prefix) != 0)
+        {
+            return false;
+        }
+        size_t firstSeparator = arguments.find(L'|', prefix.size());
+        size_t secondSeparator = firstSeparator == std::wstring::npos
+            ? std::wstring::npos
+            : arguments.find(L'|', firstSeparator + 1);
+        if (firstSeparator == std::wstring::npos || secondSeparator == std::wstring::npos)
+        {
+            return false;
+        }
+        requestFileName = arguments.substr(prefix.size(), firstSeparator - prefix.size());
+        resultFileName = arguments.substr(
+            firstSeparator + 1,
+            secondSeparator - firstSeparator - 1);
+        std::wstring ownerText = arguments.substr(secondSeparator + 1);
+        wchar_t* end = nullptr;
+        unsigned long long ownerValue = wcstoull(ownerText.c_str(), &end, 16);
+        if (ownerText.empty() || end == nullptr || *end != L'\0')
+        {
+            return false;
+        }
+        ownerWindow = reinterpret_cast<HWND>(static_cast<uintptr_t>(ownerValue));
+        return IsSafePinFileName(requestFileName, L"tile-pin-") &&
+            IsSafePinFileName(resultFileName, L"tile-pin-result-");
+    }
+
+    int PinOrUpdateDesktopTile(const std::wstring& activationArguments)
+    {
+        std::wstring requestFileName;
+        std::wstring resultFileName;
+        HWND ownerWindow = nullptr;
+        if (!ParsePinActivationArguments(
+            activationArguments,
+            requestFileName,
+            resultFileName,
+            ownerWindow))
+        {
+            return 20;
+        }
+
+        std::wstring localStateDirectory = GetParentDirectory(GetRequestPath());
+        PinTileRequest request;
+        if (localStateDirectory.empty() ||
+            !ReadPinTileRequest(localStateDirectory, requestFileName, request))
+        {
+            WritePinResult(localStateDirectory, resultFileName, "error\tInvalid tile pin request.");
+            return 21;
+        }
+
+        HRESULT initializeResult = RoInitialize(RO_INIT_MULTITHREADED);
+        if (FAILED(initializeResult))
+        {
+            WritePinResult(localStateDirectory, resultFileName, "error\tCould not initialize the desktop tile service.");
+            return 22;
+        }
+
+        int exitCode = 0;
+        try
+        {
+            namespace Foundation = winrt::Windows::Foundation;
+            namespace UI = winrt::Windows::UI;
+            namespace StartScreen = winrt::Windows::UI::StartScreen;
+
+            std::wstring baseUri = L"ms-appdata:///local/Tiles/" + request.Id;
+            StartScreen::TileSize desiredSize = request.Wide
+                ? StartScreen::TileSize::Wide310x150
+                : StartScreen::TileSize::Square150x150;
+            StartScreen::SecondaryTile tile(
+                winrt::hstring(request.Id),
+                winrt::hstring(request.Name),
+                winrt::hstring(L"tile:" + request.Id),
+                Foundation::Uri(winrt::hstring(baseUri + L"/Square.png")),
+                desiredSize);
+            StartScreen::SecondaryTileVisualElements visuals = tile.VisualElements();
+            visuals.Square44x44Logo(Foundation::Uri(winrt::hstring(baseUri + L"/Small.png")));
+            visuals.Wide310x150Logo(Foundation::Uri(winrt::hstring(baseUri + L"/Wide.png")));
+            visuals.Square310x310Logo(Foundation::Uri(winrt::hstring(baseUri + L"/Square.png")));
+            visuals.ShowNameOnSquare150x150Logo(request.ShowName);
+            visuals.ShowNameOnWide310x150Logo(request.ShowName);
+            visuals.ShowNameOnSquare310x310Logo(request.ShowName);
+            visuals.ForegroundText(StartScreen::ForegroundText::Light);
+            visuals.BackgroundColor(UI::Color{ 255, 20, 24, 30 });
+
+            if (StartScreen::SecondaryTile::Exists(winrt::hstring(request.Id)))
+            {
+                bool updated = tile.UpdateAsync().get();
+                WritePinResult(
+                    localStateDirectory,
+                    resultFileName,
+                    updated ? "success\tupdated" : "error\tWindows rejected the tile update.");
+                exitCode = updated ? 0 : 23;
+            }
+            else
+            {
+                if (ownerWindow == nullptr || !IsWindow(ownerWindow))
+                {
+                    ownerWindow = GetForegroundWindow();
+                }
+                auto initializeWithWindow = tile.as<::IInitializeWithWindow>();
+                winrt::check_hresult(initializeWithWindow->Initialize(ownerWindow));
+                bool created = tile.RequestCreateAsync().get();
+                WritePinResult(
+                    localStateDirectory,
+                    resultFileName,
+                    created ? "success\tcreated" : "cancelled");
+                exitCode = 0;
+            }
+        }
+        catch (const winrt::hresult_error& error)
+        {
+            std::ostringstream message;
+            message << "error\tDesktop tile service failed: 0x"
+                << std::hex << std::uppercase << static_cast<uint32_t>(error.code().value);
+            WritePinResult(localStateDirectory, resultFileName, message.str());
+            exitCode = 24;
+        }
+        catch (...)
+        {
+            WritePinResult(localStateDirectory, resultFileName, "error\tUnknown desktop tile service error.");
+            exitCode = 25;
+        }
+
+        RoUninitialize();
+        return exitCode;
+    }
+
+    bool StartDesktopTilePinProcess(
+        const std::wstring& localStateDirectory,
+        const std::wstring& requestFileName,
+        const std::wstring& resultFileName)
+    {
+        if (!IsSafePinFileName(requestFileName, L"tile-pin-") ||
+            !IsSafePinFileName(resultFileName, L"tile-pin-result-"))
+        {
+            return false;
+        }
+        std::wstring aumid = GetTileLauncherAumid();
+        if (aumid.empty())
+        {
+            WritePinResult(localStateDirectory, resultFileName, "error\tCould not read the desktop launcher AUMID.");
+            return false;
+        }
+        uintptr_t ownerValue = reinterpret_cast<uintptr_t>(GetForegroundWindow());
+        std::wostringstream activationArguments;
+        activationArguments << L"pin:" << requestFileName << L'|'
+            << resultFileName << L'|' << std::hex << ownerValue;
+        HRESULT result = ActivateApplication(aumid, activationArguments.str());
+        if (FAILED(result))
+        {
+            std::ostringstream message;
+            message << "error\tCould not start the desktop tile entry point: 0x"
+                << std::hex << std::uppercase << static_cast<uint32_t>(result);
+            WritePinResult(localStateDirectory, resultFileName, message.str());
+            return false;
+        }
+        return true;
+    }
 }
 
-int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
+int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR commandLine, int)
 {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    std::wstring activationArguments = commandLine == nullptr
+        ? std::wstring()
+        : std::wstring(commandLine);
+    while (!activationArguments.empty() &&
+        (activationArguments.front() == L' ' || activationArguments.front() == L'\t'))
+    {
+        activationArguments.erase(activationArguments.begin());
+    }
+    while (!activationArguments.empty() &&
+        (activationArguments.back() == L' ' || activationArguments.back() == L'\t'))
+    {
+        activationArguments.pop_back();
+    }
+    if (activationArguments.size() >= 2 &&
+        activationArguments.front() == L'"' && activationArguments.back() == L'"')
+    {
+        activationArguments = activationArguments.substr(1, activationArguments.size() - 2);
+    }
+
+    if (activationArguments.compare(0, 4, L"pin:") == 0)
+    {
+        return PinOrUpdateDesktopTile(activationArguments);
+    }
+
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     std::wstring requestPath = GetRequestPath();
     if (requestPath.empty())
     {
         CoUninitialize();
         return 1;
+    }
+
+    std::wstring tileId;
+    if (ParseTileActivationArguments(activationArguments, tileId))
+    {
+        std::wstring kind;
+        std::wstring target;
+        std::wstring arguments;
+        bool definitionLoaded = ReadTileDefinition(
+            GetParentDirectory(requestPath),
+            tileId,
+            kind,
+            target,
+            arguments);
+        bool launched = definitionLoaded && LaunchTarget(kind, target, arguments);
+        CoUninitialize();
+        return launched ? 0 : 4;
     }
 
     std::ifstream request(requestPath, std::ios::binary);
@@ -725,53 +1180,16 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
         return success ? 0 : 4;
     }
 
-    if (target.empty())
+    if (kind == L"PinTile")
     {
+        std::wstring localStateDirectory = GetParentDirectory(requestPath);
+        bool success = !localStateDirectory.empty() &&
+            StartDesktopTilePinProcess(localStateDirectory, target, arguments);
         CoUninitialize();
-        return 3;
+        return success ? 0 : 4;
     }
 
-    ShortcutLaunchResult shortcutResult = LaunchElevatedShortcutIfRequested(target, arguments);
-    if (shortcutResult != ShortcutLaunchResult::NotElevatedShortcut)
-    {
-        CoUninitialize();
-        return shortcutResult == ShortcutLaunchResult::Succeeded ? 0 : 4;
-    }
-
-    if (kind == L"AppId")
-    {
-        HRESULT activationResult = ActivateApplication(target, arguments);
-        CoUninitialize();
-        return SUCCEEDED(activationResult) ? 0 : 4;
-    }
-
-    if (kind == L"ShellApp")
-    {
-        if (IsDirectShellTarget(target))
-        {
-            const wchar_t* parameters = arguments.empty() ? nullptr : arguments.c_str();
-            HINSTANCE directResult = ShellExecuteW(
-                nullptr, L"open", target.c_str(), parameters, nullptr, SW_SHOWNORMAL);
-            CoUninitialize();
-            return reinterpret_cast<INT_PTR>(directResult) > 32 ? 0 : 4;
-        }
-
-        HRESULT activationResult = ActivateApplication(target, arguments);
-        if (SUCCEEDED(activationResult))
-        {
-            CoUninitialize();
-            return 0;
-        }
-
-        std::wstring appPath = L"shell:AppsFolder\\" + target;
-        HINSTANCE shellResult = ShellExecuteW(
-            nullptr, L"open", L"explorer.exe", appPath.c_str(), nullptr, SW_SHOWNORMAL);
-        CoUninitialize();
-        return reinterpret_cast<INT_PTR>(shellResult) > 32 ? 0 : 4;
-    }
-
-    const wchar_t* parameters = arguments.empty() ? nullptr : arguments.c_str();
-    HINSTANCE result = ShellExecuteW(nullptr, L"open", target.c_str(), parameters, nullptr, SW_SHOWNORMAL);
+    bool launched = LaunchTarget(kind, target, arguments);
     CoUninitialize();
-    return reinterpret_cast<INT_PTR>(result) > 32 ? 0 : 4;
+    return launched ? 0 : 4;
 }

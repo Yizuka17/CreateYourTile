@@ -6,7 +6,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="mp uap rescap">
 
-  <Identity Name="CreateYourTile.Local" Publisher="CN=CreateYourTile.Dev" Version="1.6.1.2" />
+  <Identity Name="CreateYourTile.Local" Publisher="CN=CreateYourTile.Dev" Version="1.6.1.6" />
   <mp:PhoneIdentity PhoneProductId="28558ffa-ba40-4b9c-a546-2fa34d29f5f2"
                     PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
